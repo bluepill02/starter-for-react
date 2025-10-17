@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "allowJs": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@recognition/schema/*": ["./packages/schema/src/*"],
+      "@recognition/tests/*": ["./packages/tests/*"],
+      "@/lib/*": ["./apps/web/src/lib/*"],
+      "@/appwrite/*": ["./apps/web/src/appwrite/*"],
+      "@/components/*": ["./apps/web/src/components/*"]
+    }
+  },
+  "include": [
+    "src",
+    "apps",
+    "packages",
+    "i18n",
+    "vite.config.js",
+    "jest.config.js",
+    "packages/tests/types/*.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

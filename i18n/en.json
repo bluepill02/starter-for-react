@@ -1,0 +1,50 @@
+{
+  "recognize": {
+    "button": "Give Recognition",
+    "title": "Recognize Someone",
+    "recipient": "Who would you like to recognize?",
+    "reason": "What did they do that deserves recognition?",
+    "tags": "Tags (optional, max 3)",
+    "evidence": "Evidence (optional)",
+    "visibility": {
+      "label": "Visibility",
+      "private": "Private",
+      "team": "Team",
+      "public": "Public"
+    }
+  },
+  "upload": {
+    "error": "Failed to upload file. Please try again.",
+    "progress": "Uploading... {{progress}}%",
+    "success": "File uploaded successfully",
+    "dragDrop": "Drag and drop files here or click to browse"
+  },
+  "privacy": {
+    "private": "Only you and the recipient can see this",
+    "team": "Your team can see this recognition",
+    "public": "Everyone in the organization can see this"
+  },
+  "validation": {
+    "required": "This field is required",
+    "minLength": "Must be at least {{min}} characters",
+    "maxTags": "Maximum {{max}} tags allowed",
+    "email": "Please enter a valid email address"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "success": "Success!",
+    "close": "Close"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "signUp": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?"
+  }
+}
