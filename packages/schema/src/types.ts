@@ -57,13 +57,18 @@ export const AuditEntrySchema = z.object({
     'RECOGNITION_CREATED',
     'RECOGNITION_VERIFIED', 
     'RECOGNITION_EXPORTED',
+    'RECOGNITION_BLOCKED',
+    'RECOGNITION_ERROR',
     'EVIDENCE_UPLOADED',
     'EVIDENCE_PREVIEWED',
     'ADMIN_ACTION',
+    'ADMIN_OVERRIDE',
     'ABUSE_FLAGGED',
     'ABUSE_REVIEWED',
+    'ABUSE_DISMISSED',
     'USER_SYNCED',
-    'INTEGRATION_CALLED'
+    'INTEGRATION_CALLED',
+    'TELEMETRY_EVENT'
   ]),
   actorId: z.string(), // Hashed user ID for privacy
   targetId: z.string().optional(), // Hashed target ID (recognition, user, etc.)
@@ -73,6 +78,55 @@ export const AuditEntrySchema = z.object({
   createdAt: z.string().datetime(),
 });
 export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
+// Abuse Flag Schema
+export const AbuseFlagSchema = z.object({
+  $id: z.string(),
+  recognitionId: z.string(),
+  flagType: z.enum(['RECIPROCITY', 'FREQUENCY', 'CONTENT', 'EVIDENCE', 'WEIGHT_MANIPULATION', 'MANUAL']),
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+  description: z.string(),
+  detectionMethod: z.enum(['AUTOMATIC', 'REPORTED', 'MANUAL_REVIEW']),
+  flaggedBy: z.enum(['SYSTEM', 'USER', 'ADMIN']),
+  flaggedAt: z.string().datetime(),
+  status: z.enum(['PENDING', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED']),
+  reviewedBy: z.string().optional(), // Admin who reviewed
+  reviewedAt: z.string().datetime().optional(),
+  reviewNotes: z.string().optional(),
+  originalWeight: z.number().optional(),
+  adjustedWeight: z.number().optional(),
+  actionTaken: z.string().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type AbuseFlag = z.infer<typeof AbuseFlagSchema>;
+
+// Admin Override Schema
+export const AdminOverrideSchema = z.object({
+  flagId: z.string(),
+  action: z.enum(['DISMISS', 'APPROVE', 'ADJUST_WEIGHT', 'ESCALATE']),
+  justification: z.string().min(10, 'Justification required for admin actions'),
+  newWeight: z.number().min(0).max(10).optional(),
+  escalationReason: z.string().optional(),
+});
+export type AdminOverride = z.infer<typeof AdminOverrideSchema>;
+
+// Telemetry Event Schema
+export const TelemetryEventSchema = z.object({
+  eventType: z.enum(['recognition_created', 'recognition_verified', 'export_requested', 'abuse_detected', 'admin_action']),
+  hashedUserId: z.string(), // Privacy-safe hashed ID
+  hashedTargetId: z.string().optional(),
+  metadata: z.object({
+    tags: z.array(z.string()).optional(),
+    evidencePresent: z.boolean().optional(),
+    source: z.enum(['WEB', 'SLACK', 'TEAMS', 'API']).optional(),
+    weight: z.number().optional(),
+    flagType: z.string().optional(),
+    severity: z.string().optional(),
+  }).optional(),
+  timestamp: z.string().datetime(),
+});
+export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;
 
 // Export Evidence Upload Schema
 export const EvidenceUploadSchema = z.object({

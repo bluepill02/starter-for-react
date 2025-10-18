@@ -1,11 +1,20 @@
 /* eslint-env node */
-/* global require, process, module */
+/* global process, Buffer, module, require */
 
-// Slack Integration Functions - Bot Commands and Webhooks
-const sdk = require('node-appwrite');
+// Slack Integration Functions - Bot Commands and Webhooks with Enhanced Security
+const { Client, Databases, Functions, ID } = require('node-appwrite');
 const crypto = require('crypto');
 
-// Slack signature verification
+// Initialize Appwrite client
+const client = new Client()
+  .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
+  .setProject(process.env.APPWRITE_PROJECT_ID)
+  .setKey(process.env.APPWRITE_API_KEY);
+
+const databases = new Databases(client);
+const functions = new Functions(client);
+
+// Slack signature verification with enhanced security
 function verifySlackSignature(body, signature, timestamp) {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) {
@@ -14,18 +23,25 @@ function verifySlackSignature(body, signature, timestamp) {
 
   // Check timestamp (should be within 5 minutes)
   const currentTime = Math.floor(Date.now() / 1000);
-  if (Math.abs(currentTime - parseInt(timestamp)) > 300) {
-    throw new Error('Request timestamp too old');
+  const requestTime = parseInt(timestamp);
+  
+  if (isNaN(requestTime) || Math.abs(currentTime - requestTime) > 300) {
+    throw new Error('Request timestamp invalid or too old');
+  }
+
+  // Verify signature format
+  if (!signature.startsWith('v0=')) {
+    throw new Error('Invalid signature format');
   }
 
   // Verify signature
   const sigBasestring = `v0:${timestamp}:${body}`;
   const expectedSignature = 'v0=' + crypto
     .createHmac('sha256', signingSecret)
-    .update(sigBasestring)
+    .update(sigBasestring, 'utf8')
     .digest('hex');
 
-  if (expectedSignature !== signature) {
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
     throw new Error('Invalid signature');
   }
 }
@@ -52,26 +68,29 @@ function parseSlackCommand(text) {
 }
 
 // Create audit entry for Slack interactions
-async function createSlackAuditEntry(databases, data) {
+async function createSlackAuditEntry(data) {
   try {
     await databases.createDocument(
-      'main',
-      'slack_notification_logs',
-      sdk.ID.unique(),
+      process.env.APPWRITE_DATABASE_ID,
+      'recognition_audit',
+      ID.unique(),
       {
-        type: data.type,
-        teamId: data.teamId,
-        channelId: data.channelId,
-        userId: data.userId,
-        recognitionId: data.recognitionId,
-        message: data.message,
-        success: data.success,
-        error: data.error,
+        eventCode: 'INTEGRATION_CALLED',
+        actorId: crypto.createHash('sha256').update(data.userId).digest('hex'),
+        metadata: {
+          integration: 'slack',
+          type: data.type,
+          teamId: data.teamId,
+          channelId: data.channelId,
+          recognitionId: data.recognitionId,
+          success: data.success,
+          error: data.error
+        },
         timestamp: new Date().toISOString()
       }
     );
-  } catch (error) {
-    console.error('Failed to create Slack audit entry:', error);
+  } catch (err) {
+    console.error('Failed to create Slack audit entry:', err);
   }
 }
 
@@ -102,16 +121,6 @@ module.exports = async ({ req, res, log, error }) => {
   try {
     const { path, method, headers, body } = req;
     
-    // Initialize Appwrite client
-    const client = new sdk.Client();
-    client
-      .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT || 'https://cloud.appwrite.io/v1')
-      .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-      .setKey(process.env.APPWRITE_API_KEY);
-
-    const databases = new sdk.Databases(client);
-    const functions = new sdk.Functions(client);
-
     // Parse request body
     let requestData;
     try {
@@ -182,13 +191,12 @@ module.exports = async ({ req, res, log, error }) => {
 
           if (result.success) {
             // Log successful command usage
-            await createSlackAuditEntry(databases, {
+            await createSlackAuditEntry({
               type: 'COMMAND_USED',
               teamId,
               channelId,
               userId,
               recognitionId: result.recognitionId,
-              message: `${command} command used successfully`,
               success: true
             });
 
@@ -210,12 +218,11 @@ module.exports = async ({ req, res, log, error }) => {
         } catch (err) {
           error('Recognition creation failed:', err);
           
-          await createSlackAuditEntry(databases, {
+          await createSlackAuditEntry({
             type: 'COMMAND_USED',
             teamId,
             channelId,
             userId,
-            message: `${command} command failed`,
             success: false,
             error: err.message
           });
@@ -345,7 +352,7 @@ module.exports = async ({ req, res, log, error }) => {
         // Send notification to Slack about new recognition
         try {
           const integration = await databases.listDocuments(
-            'main',
+            process.env.APPWRITE_DATABASE_ID,
             'slack_integrations',
             [`teamId.equal("${data.teamId}")`, 'isActive.equal(true)']
           );
@@ -392,13 +399,13 @@ module.exports = async ({ req, res, log, error }) => {
 
               const notificationResult = await sendSlackNotification(config.webhookUrl, message);
               
-              await createSlackAuditEntry(databases, {
+              await createSlackAuditEntry({
                 type: 'RECOGNITION_CREATED',
                 teamId: data.teamId,
                 recognitionId: data.recognitionId,
-                message: 'Recognition notification sent',
                 success: notificationResult.success,
-                error: notificationResult.error
+                error: notificationResult.error,
+                userId: data.giverId || 'system'
               });
             }
           }

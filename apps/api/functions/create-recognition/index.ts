@@ -1,5 +1,6 @@
 // Create Recognition Appwrite Function - Production Implementation
 import { Client, Databases, Users, ID } from 'node-appwrite';
+import { detectRecognitionAbuse } from '../services/abuse';
 
 // Environment variables
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://localhost/v1';
@@ -8,6 +9,7 @@ const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY!;
 const DATABASE_ID = process.env.DATABASE_ID || 'main';
 const RECOGNITION_COLLECTION_ID = process.env.RECOGNITION_COLLECTION_ID || 'recognitions';
 const AUDIT_COLLECTION_ID = process.env.AUDIT_COLLECTION_ID || 'audit_entries';
+const TELEMETRY_COLLECTION_ID = process.env.TELEMETRY_COLLECTION_ID || 'telemetry_events';
 
 // Initialize Appwrite client
 const client = new Client()
@@ -164,6 +166,32 @@ async function createAuditEntry(
   }
 }
 
+// Emit telemetry event for analytics and monitoring
+async function emitTelemetryEvent(
+  eventType: 'recognition_created' | 'recognition_verified' | 'export_requested' | 'abuse_detected' | 'admin_action',
+  hashedUserId: string,
+  hashedTargetId?: string,
+  metadata?: Record<string, any>
+): Promise<void> {
+  try {
+    await databases.createDocument(
+      DATABASE_ID,
+      TELEMETRY_COLLECTION_ID,
+      ID.unique(),
+      {
+        eventType,
+        hashedUserId,
+        hashedTargetId: hashedTargetId || null,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        timestamp: new Date().toISOString(),
+      }
+    );
+  } catch (error) {
+    console.error('Failed to emit telemetry event:', error);
+    // Don't fail the main operation for telemetry issues
+  }
+}
+
 // Main function execution
 export default async function createRecognition({ req, res }: any) {
   try {
@@ -264,7 +292,58 @@ export default async function createRecognition({ req, res }: any) {
       }
     );
 
-    // Create audit entry
+    // Run comprehensive abuse detection
+    let finalWeight = weight;
+    let abuseDetected = false;
+    
+    try {
+      const abuseResult = await detectRecognitionAbuse(
+        recognitionId,
+        giverUserId,
+        recipientEmail, // Will be resolved to recipientId in abuse service
+        reason,
+        weight,
+        evidenceIds.length,
+        giverRole
+      );
+      
+      if (abuseResult.isAbusive && abuseResult.adjustedWeight) {
+        finalWeight = abuseResult.adjustedWeight;
+        abuseDetected = true;
+        
+        // Update recognition with adjusted weight
+        await databases.updateDocument(
+          DATABASE_ID,
+          RECOGNITION_COLLECTION_ID,
+          recognitionId,
+          {
+            weight: finalWeight,
+            originalWeight: weight,
+            abuseFlags: abuseResult.flags.length,
+            updatedAt: new Date().toISOString()
+          }
+        );
+        
+        // Emit abuse detection telemetry
+        await emitTelemetryEvent(
+          'abuse_detected',
+          hashUserId(giverUserId),
+          hashUserId(recognitionId),
+          {
+            flagTypes: abuseResult.flags.map(f => f.flagType),
+            severity: abuseResult.severity,
+            originalWeight: weight,
+            adjustedWeight: finalWeight,
+            reasonCodes: abuseResult.reasonCodes
+          }
+        );
+      }
+    } catch (abuseError) {
+      console.error('Abuse detection failed:', abuseError);
+      // Continue with original weight if abuse detection fails
+    }
+
+    // Create audit entry for recognition creation
     await createAuditEntry(
       'RECOGNITION_CREATED',
       giverUserId,
@@ -273,8 +352,26 @@ export default async function createRecognition({ req, res }: any) {
         recipientEmail: hashUserId(recipientEmail), // Hash recipient for privacy
         tags,
         evidenceCount: evidenceIds.length,
-        weight,
-        visibility
+        weight: finalWeight,
+        originalWeight: weight,
+        visibility,
+        abuseDetected,
+        source: req.headers['x-source'] || 'WEB' // Track source (WEB, SLACK, TEAMS, API)
+      }
+    );
+
+    // Emit recognition created telemetry event
+    await emitTelemetryEvent(
+      'recognition_created',
+      hashUserId(giverUserId),
+      hashUserId(recognitionId),
+      {
+        tags,
+        evidencePresent: evidenceIds.length > 0,
+        source: req.headers['x-source'] || 'WEB',
+        weight: finalWeight,
+        visibility,
+        abuseDetected
       }
     );
 
@@ -285,9 +382,11 @@ export default async function createRecognition({ req, res }: any) {
       success: true,
       data: {
         id: recognition.$id,
-        weight,
+        weight: finalWeight,
+        originalWeight: weight,
         status: recognition.status,
-        createdAt: recognition.createdAt
+        createdAt: recognition.createdAt,
+        abuseDetected
       }
     });
 

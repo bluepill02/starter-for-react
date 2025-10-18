@@ -5,9 +5,11 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'coverage', 'node_modules', 'build'] },
+  
+  // Browser environment (React components)
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['src/**/*.{js,jsx}', 'apps/web/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -28,11 +30,47 @@ export default [
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
-      'react/jsx-no-target-blank': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
       ],
+      'react/no-unescaped-entities': 'off',
+    },
+  },
+
+  // Node.js environment (API functions, scripts)
+  {
+    files: ['apps/api/**/*.{js,ts}', 'scripts/**/*.{js,ts}', '*.config.{js,ts}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: { ...globals.node },
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+
+  // Jest test environment
+  {
+    files: ['**/*.test.{js,ts}', '**/*.spec.{js,ts}', 'packages/tests/**/*.{js,ts}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: { 
+        ...globals.jest,
+        ...globals.node,
+      },
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      ...js.configs.recommended.rules,
     },
   },
 ]

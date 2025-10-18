@@ -14,6 +14,7 @@ summary::-webkit-details-marker {
   background-image: linear-gradient(#e6e6e690 1px, transparent 1px),
   linear-gradient(90deg, #e6e6e690 1px, transparent 1px);
   background-size: 3.7em 3.7em;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, black 0%, transparent 55%);
   mask-image: radial-gradient(ellipse at 50% 40%, black 0%, transparent 55%);
   z-index: -1;
   background-position-x: center;
@@ -93,6 +94,7 @@ summary::-webkit-details-marker {
   align-items: center;
   gap: 8px;
   background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 8px 16px;
@@ -149,6 +151,7 @@ summary::-webkit-details-marker {
   align-items: center;
   gap: 8px;
   background: rgba(255, 255, 255, 0.15);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 2px solid rgba(255, 255, 255, 0.3);
   color: white;
@@ -425,6 +428,7 @@ summary::-webkit-details-marker {
 
 .testimonial-card {
   background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
@@ -1694,5 +1698,31 @@ summary::-webkit-details-marker {
   .filter-controls { flex-direction: column; }
   .recognition-grid { grid-template-columns: 1fr; }
   .card-footer { flex-direction: column; align-items: flex-start; }
+  
+  .profile-header { 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 24px; 
+    padding: 24px;
+  }
+  .profile-info { 
+    flex-direction: column; 
+    text-align: center; 
+    gap: 20px; 
+  }
+  .profile-actions { 
+    width: 100%; 
+    justify-content: center; 
+  }
+  .stats-grid { 
+    grid-template-columns: 1fr; 
+  }
+  .profile-tabs { 
+    flex-direction: column; 
+    gap: 8px; 
+  }
+  .tab-content { 
+    padding: 20px; 
+  }
 }
 

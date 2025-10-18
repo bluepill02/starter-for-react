@@ -1,0 +1,14 @@
+{
+  "name": "teams-integration",
+  "version": "1.0.0",
+  "description": "Microsoft Teams integration for recognition platform",
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "node-appwrite": "^13.0.0",
+    "jsonwebtoken": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

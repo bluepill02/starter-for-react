@@ -22,6 +22,9 @@ const client = new Client()
 const databases = new Databases(client);
 const users = new Users(client);
 
+// Constants
+const TELEMETRY_COLLECTION_ID = process.env.TELEMETRY_COLLECTION_ID || 'telemetry_events';
+
 // Hash user ID for privacy in logs and exports
 function hashUserId(userId: string): string {
   return crypto.createHash('sha256').update(userId).digest('hex').substring(0, 16);
@@ -65,6 +68,32 @@ async function createAuditEntry(
   } catch (error) {
     console.error('Failed to create audit entry:', error);
     // Don't fail the main operation for audit issues
+  }
+}
+
+// Emit telemetry event for analytics and monitoring
+async function emitTelemetryEvent(
+  eventType: 'recognition_created' | 'recognition_verified' | 'export_requested' | 'abuse_detected' | 'admin_action',
+  hashedUserId: string,
+  hashedTargetId?: string,
+  metadata?: Record<string, any>
+): Promise<void> {
+  try {
+    await databases.createDocument(
+      process.env.APPWRITE_DATABASE_ID || 'main',
+      TELEMETRY_COLLECTION_ID,
+      ID.unique(),
+      {
+        eventType,
+        hashedUserId,
+        hashedTargetId: hashedTargetId || null,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        timestamp: new Date().toISOString(),
+      }
+    );
+  } catch (error) {
+    console.error('Failed to emit telemetry event:', error);
+    // Don't fail the main operation for telemetry issues
   }
 }
 
@@ -181,6 +210,23 @@ export default async ({ req, res, log, error }: any) => {
         giverUserId: hashUserId(recognition.giverUserId),
         hasNote: !!requestData.verificationNote,
         tags: recognition.tags
+      }
+    );
+    
+    // Emit telemetry event for verification
+    await emitTelemetryEvent(
+      'recognition_verified',
+      hashUserId(requestData.verifierId),
+      hashUserId(requestData.recognitionId),
+      {
+        verified: requestData.verified,
+        originalWeight: recognition.weight,
+        verifiedWeight: newWeight,
+        weightChange: newWeight - recognition.weight,
+        verifierRole,
+        evidencePresent: recognition.evidenceIds && recognition.evidenceIds.length > 0,
+        hasNote: !!requestData.verificationNote,
+        tags: recognition.tags || []
       }
     );
     

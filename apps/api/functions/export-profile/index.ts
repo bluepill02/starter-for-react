@@ -23,6 +23,9 @@ const databases = new Databases(client);
 const storage = new Storage(client);
 const users = new Users(client);
 
+// Constants
+const TELEMETRY_COLLECTION_ID = process.env.TELEMETRY_COLLECTION_ID || 'telemetry_events';
+
 // Hash user ID for privacy in exports
 function hashUserId(userId: string): string {
   return crypto.createHash('sha256').update(userId).digest('hex').substring(0, 16);
@@ -231,6 +234,32 @@ async function createAuditEntry(
   }
 }
 
+// Emit telemetry event for analytics and monitoring
+async function emitTelemetryEvent(
+  eventType: 'recognition_created' | 'recognition_verified' | 'export_requested' | 'abuse_detected' | 'admin_action',
+  hashedUserId: string,
+  hashedTargetId?: string,
+  metadata?: Record<string, any>
+): Promise<void> {
+  try {
+    await databases.createDocument(
+      process.env.APPWRITE_DATABASE_ID || 'main',
+      TELEMETRY_COLLECTION_ID,
+      ID.unique(),
+      {
+        eventType,
+        hashedUserId,
+        hashedTargetId: hashedTargetId || null,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        timestamp: new Date().toISOString(),
+      }
+    );
+  } catch (error) {
+    console.error('Failed to emit telemetry event:', error);
+    // Don't fail the main operation for telemetry issues
+  }
+}
+
 export default async ({ req, res, log, error }: any) => {
   if (req.method !== 'POST') {
     return res.json({ error: 'Method not allowed' }, 405);
@@ -332,6 +361,21 @@ export default async ({ req, res, log, error }: any) => {
         targetUserEmail: hashUserId(targetUser.email),
         recordCount: recognitionData.length,
         fileId: hashUserId(fileId)
+      }
+    );
+    
+    // Emit telemetry event for export
+    await emitTelemetryEvent(
+      'export_requested',
+      hashUserId(requestData.requesterId),
+      hashUserId(requestData.userId),
+      {
+        format: requestData.format,
+        includePrivateData,
+        requesterRole,
+        recordCount: recognitionData.length,
+        fileSize: Buffer.byteLength(fileContent, 'utf8'),
+        selfExport: requestData.requesterId === requestData.userId
       }
     );
     

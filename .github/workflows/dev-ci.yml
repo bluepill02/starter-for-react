@@ -1,0 +1,290 @@
+name: Development CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '18'
+  APPWRITE_PROJECT_ID: 'recognition-dev'
+  APPWRITE_ENDPOINT: 'http://localhost:8080/v1'
+  APPWRITE_API_KEY: 'dev-api-key-for-ci'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint and TypeCheck
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run ESLint
+        run: npm run lint
+        
+      - name: TypeScript check
+        run: npm run type-check
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run Jest tests
+        run: npm run test:unit
+        env:
+          CI: true
+          
+      - name: Upload unit test coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-coverage
+          path: coverage/
+
+  e2e-tests:
+    name: E2E Tests with Appwrite Emulator
+    runs-on: ubuntu-latest
+    
+    services:
+      appwrite:
+        image: appwrite/appwrite:1.4.13
+        ports:
+          - 8080:80
+        env:
+          _APP_ENV: development
+          _APP_WORKER_PER_CORE: 6
+          _APP_LOCALE: en
+          _APP_CONSOLE_WHITELIST_ROOT: enabled
+          _APP_CONSOLE_WHITELIST_EMAILS: dev@localhost
+          _APP_CONSOLE_WHITELIST_IPS: 
+          _APP_SYSTEM_EMAIL_NAME: Appwrite
+          _APP_SYSTEM_EMAIL_ADDRESS: team@appwrite.io
+          _APP_SYSTEM_SECURITY_EMAIL_ADDRESS: cve@appwrite.io
+          _APP_SYSTEM_RESPONSE_FORMAT: 
+          _APP_OPTIONS_ABUSE: enabled
+          _APP_OPTIONS_FORCE_HTTPS: disabled
+          _APP_OPENSSL_KEY_V1: your-secret-key
+          _APP_DOMAIN: localhost
+          _APP_DOMAIN_TARGET: localhost
+          _APP_REDIS_HOST: redis
+          _APP_REDIS_PORT: 6379
+          _APP_REDIS_USER: 
+          _APP_REDIS_PASS: 
+          _APP_DB_HOST: mariadb
+          _APP_DB_PORT: 3306
+          _APP_DB_SCHEMA: appwrite
+          _APP_DB_USER: user
+          _APP_DB_PASS: password
+          _APP_SMTP_HOST: 
+          _APP_SMTP_PORT: 
+          _APP_SMTP_SECURE: 
+          _APP_SMTP_USERNAME: 
+          _APP_SMTP_PASSWORD: 
+          _APP_USAGE_STATS: enabled
+          _APP_INFLUXDB_HOST: influxdb
+          _APP_INFLUXDB_PORT: 8086
+          _APP_STORAGE_LIMIT: 30000000
+          _APP_FUNCTIONS_SIZE_LIMIT: 30000000
+          _APP_FUNCTIONS_TIMEOUT: 900
+          _APP_FUNCTIONS_BUILD_TIMEOUT: 900
+          _APP_FUNCTIONS_CONTAINERS: 10
+          _APP_FUNCTIONS_CPUS: 0
+          _APP_FUNCTIONS_MEMORY: 0
+          _APP_FUNCTIONS_MEMORY_SWAP: 0
+          _APP_FUNCTIONS_RUNTIMES: node-18.0,php-8.0,python-3.9,ruby-3.0
+          
+      redis:
+        image: redis:7.0-alpine
+        ports:
+          - 6379:6379
+          
+      mariadb:
+        image: mariadb:10.7
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: appwrite
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Wait for Appwrite to be ready
+        run: |
+          echo "Waiting for Appwrite service to be ready..."
+          timeout 60 bash -c 'until curl -f http://localhost:8080/v1/health; do echo "Waiting..."; sleep 2; done'
+          echo "Appwrite is ready!"
+          
+      - name: Setup Appwrite project
+        run: |
+          npm run emulator:bootstrap
+          sleep 5
+          
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+        
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            packages/tests/e2e/test-results/
+            packages/tests/e2e/playwright-report/
+
+  migration-dry-run:
+    name: Migration Dry Run
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run migration dry-run
+        run: |
+          echo "Running migration dry-run..."
+          if [ -f "scripts/migrate.js" ]; then
+            node scripts/migrate.js --dry-run
+          else
+            echo "No migration script found, skipping"
+          fi
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=high --production
+          
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  build-verification:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, unit-tests]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build web app
+        run: npm run build:web
+        
+      - name: Build API functions
+        run: npm run build:api
+        
+      - name: Verify build outputs
+        run: |
+          echo "Verifying web build..."
+          ls -la apps/web/dist/
+          echo "Verifying API functions build..."
+          ls -la apps/api/functions/*/dist/ || echo "No function builds found"
+
+  deployment-readiness:
+    name: Deployment Readiness Check
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, unit-tests, e2e-tests, migration-dry-run, security-scan, build-verification]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Check deployment requirements
+        run: |
+          echo "✅ All CI checks passed"
+          echo "✅ Lint and TypeCheck: OK"
+          echo "✅ Unit Tests: OK"
+          echo "✅ E2E Tests: OK"
+          echo "✅ Migration Dry Run: OK"
+          echo "✅ Security Scan: OK"
+          echo "✅ Build Verification: OK"
+          echo ""
+          echo "🚀 Ready for deployment!"
+          
+      - name: Create deployment artifact
+        run: |
+          echo "Creating deployment summary..."
+          cat > deployment-summary.txt << EOF
+          Deployment Ready: $(date)
+          Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          All checks: PASSED
+          EOF
+          
+      - name: Upload deployment summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-summary
+          path: deployment-summary.txt

@@ -2,8 +2,11 @@ export default {
   preset: 'ts-jest/presets/default-esm',
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   testEnvironment: 'jsdom',
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons'],
+  },
   roots: ['<rootDir>/packages/tests'],
-  testMatch: ['**/__tests__/**/*.ts', '**/__tests__/**/*.tsx', '**/?(*.)+(spec|test).ts', '**/?(*.)+(spec|test).tsx'],
+  testMatch: ['**/__tests__/**/*.ts', '**/__tests__/**/*.tsx', '**/?(*.)+(spec|test).ts', '**/?(*.)+(spec|test).tsx', '**/?(*.)+(spec|test).js'],
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
       useESM: true,
@@ -17,6 +20,9 @@ export default {
       },
     }],
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(.*\\.mjs$))'
+  ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   collectCoverageFrom: [
     'packages/schema/**/*.ts',
@@ -25,9 +31,6 @@ export default {
     '!**/*.d.ts',
   ],
   setupFilesAfterEnv: ['<rootDir>/packages/tests/jest.setup.ts'],
-  testEnvironmentOptions: {
-    customExportConditions: ['node', 'node-addons'],
-  },
   globals: {
     'ts-jest': {
       useESM: true,
