@@ -1,6 +1,13 @@
 // Create Recognition Appwrite Function - Production Implementation
 import { Client, Databases, Users, ID } from 'node-appwrite';
 import { detectRecognitionAbuse } from '../services/abuse';
+import { checkRateLimit } from '../services/rate-limiter';
+import { getIdempotencyKey, checkDuplicate, storeIdempotencyRecord } from '../services/idempotency';
+import { idempotencyMiddleware } from '../services/idempotency';
+import { QuotaManager } from '../services/quota-management';
+import { CircuitBreaker } from '../services/circuit-breaker';
+import { MetricsCollector, getMetricsCollector } from '../services/metrics-exporter';
+import { logStructured } from '../services/structured-logger';
 
 // Environment variables
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://localhost/v1';
@@ -195,6 +202,9 @@ async function emitTelemetryEvent(
 // Main function execution
 export default async function createRecognition({ req, res }: any) {
   try {
+    // Phase 5: Start metrics tracking
+    const startTime = Date.now();
+
     // Parse request body
     const body: CreateRecognitionRequest = JSON.parse(req.body || '{}');
     const {
@@ -205,6 +215,15 @@ export default async function createRecognition({ req, res }: any) {
       evidenceIds,
       giverUserId
     } = body;
+
+    // Phase 3A: Check idempotency for duplicate protection
+    const idempotencyKey = getIdempotencyKey(req);
+    if (idempotencyKey && giverUserId) {
+      const duplicate = await checkDuplicate(idempotencyKey, giverUserId);
+      if (duplicate) {
+        return res.json(duplicate.responseData, 200);
+      }
+    }
 
     // Validate required fields
     if (!recipientEmail || !tags?.length || !reason || !giverUserId) {
@@ -239,6 +258,46 @@ export default async function createRecognition({ req, res }: any) {
         success: false,
         error: 'Cannot give recognition to yourself'
       }, 400);
+    }
+
+    // Check rate limits using rate-limiter service
+    const rateLimitCheck = await checkRateLimit(
+      giverUserId,
+      'recognition_daily',
+      databases
+    );
+    if (!rateLimitCheck.allowed) {
+      await createAuditEntry(
+        'RECOGNITION_RATE_LIMITED',
+        giverUserId,
+        undefined,
+        {
+          recipientEmail,
+          rateLimitType: 'recognition_daily',
+          remaining: rateLimitCheck.remaining
+        }
+      );
+      return res.json({
+        success: false,
+        error: `Rate limit exceeded. You have ${rateLimitCheck.remaining} recognitions remaining today.`
+      }, 429);
+    }
+
+    // Check organization quotas (Phase 4)
+    try {
+      const userDoc = await databases.getDocument(DATABASE_ID, 'users', giverUserId);
+      const organizationId = userDoc.organizationId;
+      const quotaManager = new QuotaManager(organizationId);
+      const quotaCheck = await quotaManager.checkQuota('recognitions_per_day');
+      if (!quotaCheck.allowed) {
+        return res.json({
+          success: false,
+          error: `Organization recognition quota exceeded. Remaining: ${quotaCheck.remaining}`
+        }, 429);
+      }
+    } catch (quotaErr) {
+      // Graceful degradation: if quota check fails, log but continue
+      console.warn('Quota check failed, continuing with degraded service', quotaErr);
     }
 
     // Anti-abuse checks
@@ -378,7 +437,7 @@ export default async function createRecognition({ req, res }: any) {
     // TODO: Send notification to recipient (integrate with Slack/Teams)
     // TODO: Queue for manager verification if high-value recognition
 
-    return res.json({
+    const responseData = {
       success: true,
       data: {
         id: recognition.$id,
@@ -388,10 +447,55 @@ export default async function createRecognition({ req, res }: any) {
         createdAt: recognition.createdAt,
         abuseDetected
       }
-    });
+    };
+
+    // Phase 5: Record metrics for observability
+    try {
+      const metrics = getMetricsCollector();
+      metrics.recordFunctionExecution('create-recognition', Date.now() - startTime, true);
+      metrics.recordEvent('recognition_created', {
+        weight: finalWeight,
+        hasEvidence: !!evidenceFile,
+        abuseDetected,
+        visibility
+      });
+      logStructured('recognition_created', {
+        recognitionId: recognition.$id,
+        giverUserId: hashUserId(giverUserId),
+        recipientEmail: hashUserId(recipientEmail),
+        weight: finalWeight,
+        visibility
+      });
+    } catch (metricsErr) {
+      console.warn('Failed to record metrics', metricsErr);
+    }
+
+    // Phase 3A: Store idempotency result for duplicate protection
+    if (idempotencyKey && giverUserId) {
+      await storeIdempotencyRecord(
+        idempotencyKey,
+        giverUserId,
+        'create_recognition',
+        responseData
+      );
+    }
+
+    return res.json(responseData);
 
   } catch (error) {
     console.error('Create recognition error:', error);
+
+    // Phase 5: Record error metrics
+    try {
+      const metrics = getMetricsCollector();
+      metrics.recordFunctionExecution('create-recognition', Date.now() - startTime, false);
+      logStructured('recognition_failed', {
+        error: error.message,
+        code: error.code || 'UNKNOWN_ERROR'
+      });
+    } catch (metricsErr) {
+      console.warn('Failed to record error metrics', metricsErr);
+    }
 
     // Create error audit entry
     try {

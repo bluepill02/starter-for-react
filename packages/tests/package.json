@@ -7,9 +7,12 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:rbac": "playwright test rbac-comprehensive.spec.js",
+    "test:e2e:rbac:headed": "playwright test rbac-comprehensive.spec.js --headed",
     "test:smoke": "playwright test smoke.spec.ts",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
     "playwright:install": "playwright install"
   },
   "devDependencies": {

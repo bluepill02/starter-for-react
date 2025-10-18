@@ -26,6 +26,8 @@
     "build:api": "cd apps/api && npm run build",
     "type-check": "tsc --noEmit --project .",
     "emulator:bootstrap": "bash scripts/bootstrap-project.sh",
+    "appwrite:setup": "node scripts/setup-appwrite-collections.js",
+    "appwrite:test": "node scripts/test-appwrite-integration.js",
     "prepare": "husky install",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -44,8 +46,6 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@commitlint/cli": "^18.4.3",
-    "@commitlint/config-conventional": "^18.4.3",
     "@eslint/js": "^9.19.0",
     "@playwright/test": "^1.48.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -57,6 +57,10 @@
     "@types/testing-library__jest-dom": "^5.14.9",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^8.2.2",
+    "@commitlint/cli": "^18.4.3",
+    "@commitlint/config-conventional": "^18.4.3",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^9.19.0",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^5.0.0",

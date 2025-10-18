@@ -2,8 +2,120 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import "./App.css";
 import { useRecognitions, useUserRecognitions } from "./hooks/useRecognitions.js";
+import { useI18n, getCurrentLocale, setLocale, getAvailableLocales } from "../apps/web/src/lib/i18n.ts";
+import Leaderboard from "../apps/web/src/pages/leaderboard.tsx";
+import Analytics from "../apps/web/src/pages/analytics.tsx";
+import { SignInPage } from "../apps/web/src/pages/sign-in.tsx";
+import DomainsPage from "../apps/web/src/pages/admin/domains.tsx";
+import AuditLogExportPage from "../apps/web/src/pages/admin/audit-log-export.tsx";
+import CompliancePolicyPage from "../apps/web/src/pages/admin/compliance-policy.tsx";
+import SystemHealthPage from "../apps/web/src/pages/system-health.tsx";
+import QuotaManagementPage from "../apps/web/src/pages/admin/quota-management.tsx";
+import MonitoringDashboard from "../apps/web/src/pages/admin/monitoring.tsx";
+import IncidentResponse from "../apps/web/src/pages/admin/incident-response.tsx";
+import AdminDashboard from "../apps/web/src/pages/admin/index.tsx";
+import AdminVerifyPage from "../apps/web/src/pages/admin/verify.tsx";
+import AdminAnalyticsPage from "../apps/web/src/pages/admin/analytics.tsx";
+import AdminGrowthPage from "../apps/web/src/pages/admin/growth.tsx";
+import AdminAbusePage from "../apps/web/src/pages/admin/abuse.tsx";
+import OnboardingOverlay from "../apps/web/src/components/OnboardingOverlay.tsx";
+import { useAuth } from "../apps/web/src/lib/auth";
+import { getOnboardingState, isCompleted } from "../apps/web/src/lib/onboarding";
+import { OAuthCallbackPage } from "../apps/web/src/pages/auth/callback.tsx";
+import SettingsPage from "../apps/web/src/pages/settings/index.tsx";
+import IntegrationsPage from "../apps/web/src/pages/integrations/index.tsx";
+import MicroInteractionsDemo from "../apps/web/src/pages/demo/micro-interactions.tsx";
+import { ToastProvider } from "../apps/web/src/hooks/useToast.tsx";
+import { ToastContainer } from "../apps/web/src/components/ToastContainer.tsx";
+// i18n header controls are imported above
 
 function Landing() {
+  const [demoOpen, setDemoOpen] = React.useState(false);
+  const demoTitleId = "demo-modal-title";
+  const demoRef = React.useRef(null);
+  const locale = getCurrentLocale();
+
+  // Landing i18n strings
+  const badgeText = useI18n('landing.badge');
+  const heroTitleHtml = useI18n(locale === 'ta' ? 'landing.hero_title_ta' : 'landing.hero_title');
+  const heroSubtitle = useI18n('landing.hero_subtitle');
+  const ctaPrimary = useI18n('landing.cta_primary');
+  const ctaDemo = useI18n('landing.cta_demo');
+  const statSatisfaction = useI18n('landing.stat_satisfaction');
+  const statFaster = useI18n('landing.stat_faster');
+  const statCompliant = useI18n('landing.stat_compliant');
+  const featuresTitle = useI18n('landing.features_title');
+  const featuresSubtitle = useI18n('landing.features_subtitle');
+  const featEvTitle = useI18n('landing.feature_evidence_title');
+  const featEvDesc = useI18n('landing.feature_evidence_desc');
+  const featEvBadge = useI18n('landing.feature_evidence_badge');
+  const featVerTitle = useI18n('landing.feature_verification_title');
+  const featVerDesc = useI18n('landing.feature_verification_desc');
+  const featVerBadge = useI18n('landing.feature_verification_badge');
+  const featAnTitle = useI18n('landing.feature_analytics_title');
+  const featAnDesc = useI18n('landing.feature_analytics_desc');
+  const featAnBadge = useI18n('landing.feature_analytics_badge');
+  const featPrTitle = useI18n('landing.feature_privacy_title');
+  const featPrDesc = useI18n('landing.feature_privacy_desc');
+  const featPrBadge = useI18n('landing.feature_privacy_badge');
+  const featAuTitle = useI18n('landing.feature_audit_title');
+  const featAuDesc = useI18n('landing.feature_audit_desc');
+  const featAuBadge = useI18n('landing.feature_audit_badge');
+  const trustAudit = useI18n('landing.trust_audit_ready');
+  const trustVerified = useI18n('landing.trust_manager_verified');
+  const trustPrivate = useI18n('landing.trust_private_by_default');
+  const ariaSsoGoogle = useI18n('landing.sso_google');
+  const ariaSsoMicrosoft = useI18n('landing.sso_microsoft');
+  const testimonial1 = useI18n('landing.testimonial_1');
+  const testimonial1Author = useI18n('landing.testimonial_1_author');
+  const testimonial1Title = useI18n('landing.testimonial_1_title');
+  const testimonial2 = useI18n('landing.testimonial_2');
+  const testimonial2Author = useI18n('landing.testimonial_2_author');
+  const testimonial2Title = useI18n('landing.testimonial_2_title');
+  const demoTitle = useI18n('landing.demo_title');
+  const demoRecipient = useI18n('landing.demo_recipient');
+  const demoTags = useI18n('landing.demo_tags');
+  const demoReason = useI18n('landing.demo_reason');
+  const demoReasonPh = useI18n('landing.demo_reason_placeholder');
+  const demoSend = useI18n('landing.demo_send');
+  const ariaClose = useI18n('landing.aria_close');
+
+  React.useEffect(() => {
+    if (demoOpen && demoRef.current) {
+      const firstInput = demoRef.current.querySelector('.demo-input');
+      if (firstInput) {
+        firstInput.focus();
+      }
+    }
+  }, [demoOpen]);
+
+  const onDemoKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      setDemoOpen(false);
+      return;
+    }
+    if (e.key === 'Tab' && demoRef.current) {
+      const focusables = demoRef.current.querySelectorAll(
+        'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const firstEl = focusables[0];
+      const lastEl = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        }
+      } else {
+        if (document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
+    }
+  };
+
   return (
     <div className="landing-page">
       {/* Hero Section */}
@@ -12,70 +124,53 @@ function Landing() {
         <div className="container">
           <div className="hero-content">
             <div className="hero-badge">
-              <span className="badge-icon">🏆</span>
-              <span>Trusted by 1000+ teams worldwide</span>
+              <span className="badge-icon">🔒</span>
+              <span>{badgeText}</span>
             </div>
-            <h1 id="hero-heading" className="hero-title">
-              Recognition that
-              <span className="gradient-text"> drives results</span>
-            </h1>
-            <p className="hero-subtitle">
-              The only recognition platform that combines evidence-based feedback, 
-              manager verification, and enterprise-grade analytics to build high-performing teams.
-            </p>
+            <h1
+              id="hero-heading"
+              className="hero-title"
+              lang={locale === 'ta' ? 'ta' : undefined}
+              dangerouslySetInnerHTML={{ __html: heroTitleHtml }}
+            />
+            <p className="hero-subtitle">{heroSubtitle}</p>
             <div className="hero-cta">
-              <Link to="/feed" className="btn-hero-primary">
-                <span>Explore Live Feed</span>
+              <Link to="/sign-in" className="btn-hero-primary cta-animate" aria-label={ctaPrimary}>
+                <span>{ctaPrimary}</span>
                 <svg className="btn-icon" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </Link>
-              <Link to="/profile" className="btn-hero-secondary">
-                <span>View Profile</span>
-              </Link>
+              <button type="button" className="btn-hero-secondary-link" onClick={() => setDemoOpen(true)}>
+                {ctaDemo}
+              </button>
             </div>
             <div className="hero-stats">
               <div className="stat-item">
-                <span className="stat-number">98%</span>
-                <span className="stat-label">Team Satisfaction</span>
+                <span className="stat-number">🔒</span>
+                <span className="stat-label">{statSatisfaction}</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">3x</span>
-                <span className="stat-label">Faster Recognition</span>
+                <span className="stat-number">📋</span>
+                <span className="stat-label">{statFaster}</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">100%</span>
-                <span className="stat-label">Audit Compliant</span>
+                <span className="stat-number">✓</span>
+                <span className="stat-label">{statCompliant}</span>
               </div>
             </div>
           </div>
           <div className="hero-visual">
-            <div className="floating-cards">
-              <div className="floating-card card-1">
-                <div className="card-header">
-                  <div className="user-avatar">JD</div>
-                  <div>
-                    <div className="user-name">John Doe</div>
-                    <div className="user-title">Engineering Lead</div>
-                  </div>
-                </div>
-                <div className="card-content">"Exceptional debugging skills during the critical incident..."</div>
-                <div className="card-badge verified">✓ Manager Verified</div>
-              </div>
-              <div className="floating-card card-2">
-                <div className="card-header">
-                  <div className="user-avatar">SM</div>
-                  <div>
-                    <div className="user-name">Sarah Miller</div>
-                    <div className="user-title">Product Manager</div>
-                  </div>
-                </div>
-                <div className="card-content">"Outstanding customer advocacy and feature prioritization..."</div>
-                <div className="card-tags">
-                  <span className="tag">#customer-focus</span>
-                  <span className="tag">#leadership</span>
-                </div>
-              </div>
+            <div className="subtle-illustration" aria-hidden="true">
+              <svg viewBox="0 0 400 400" className="blob-illustration">
+                <defs>
+                  <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style={{ stopColor: '#e0f2fe', stopOpacity: 1 }} />
+                    <stop offset="100%" style={{ stopColor: '#e9d5ff', stopOpacity: 1 }} />
+                  </linearGradient>
+                </defs>
+                <path fill="url(#grad)" d="M319,263Q287,326,214,338Q141,350,105,295Q69,240,79,171Q89,102,158,79Q227,56,287,99Q347,142,346,206Q345,270,319,263Z"/>
+              </svg>
             </div>
           </div>
         </div>
@@ -85,46 +180,61 @@ function Landing() {
       <section className="features-section" aria-labelledby="features-heading">
         <div className="container">
           <div className="section-header">
-            <h2 id="features-heading" className="section-title">Why teams choose Recognition</h2>
-            <p className="section-subtitle">Built for modern teams that value transparency, growth, and results</p>
+            <h2 id="features-heading" className="section-title">{featuresTitle}</h2>
+            <p className="section-subtitle">{featuresSubtitle}</p>
           </div>
           <div className="features-grid">
             <div className="feature-card">
               <div className="feature-icon evidence-icon">📋</div>
-              <h3>Evidence-Based Recognition</h3>
-              <p>Upload screenshots, documents, or links as evidence. Recognition backed by proof carries 50% more weight.</p>
-              <div className="feature-highlight">50% weight bonus</div>
+              <h3>{featEvTitle}</h3>
+              <p>{featEvDesc}</p>
+              <div className="feature-highlight">{featEvBadge}</div>
             </div>
             <div className="feature-card">
               <div className="feature-icon verification-icon">✅</div>
-              <h3>Manager Verification</h3>
-              <p>Built-in approval workflows ensure recognition aligns with company values and performance standards.</p>
-              <div className="feature-highlight">Built-in workflows</div>
+              <h3>{featVerTitle}</h3>
+              <p>{featVerDesc}</p>
+              <div className="feature-highlight">{featVerBadge}</div>
             </div>
             <div className="feature-card">
               <div className="feature-icon analytics-icon">📊</div>
-              <h3>Enterprise Analytics</h3>
-              <p>Track team engagement, recognition patterns, and performance metrics with comprehensive dashboards.</p>
-              <div className="feature-highlight">Real-time insights</div>
+              <h3>{featAnTitle}</h3>
+              <p>{featAnDesc}</p>
+              <div className="feature-highlight">{featAnBadge}</div>
             </div>
             <div className="feature-card">
               <div className="feature-icon privacy-icon">🔒</div>
-              <h3>Privacy-First Design</h3>
-              <p>GDPR compliant with granular privacy controls. All exports use hashed identifiers to protect employee data.</p>
-              <div className="feature-highlight">GDPR compliant</div>
+              <h3>{featPrTitle}</h3>
+              <p>{featPrDesc}</p>
+              <div className="feature-highlight">{featPrBadge}</div>
             </div>
             <div className="feature-card">
               <div className="feature-icon integration-icon">🔗</div>
-              <h3>Seamless Integrations</h3>
-              <p>Works with Slack, Teams, and your existing HR systems. No workflow disruption, just enhanced recognition.</p>
-              <div className="feature-highlight">Zero disruption</div>
+              <h3>{featAuTitle}</h3>
+              <p>{featAuDesc}</p>
+              <div className="feature-highlight">{featAuBadge}</div>
             </div>
-            <div className="feature-card">
-              <div className="feature-icon audit-icon">📈</div>
-              <h3>Audit-Ready Reports</h3>
-              <p>Generate comprehensive reports for performance reviews, compliance audits, and talent development programs.</p>
-              <div className="feature-highlight">Compliance ready</div>
-            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Signals */}
+      <section className="trust-strip" aria-label="Trust signals">
+        <div className="container trust-content">
+          <div className="sso-badges" aria-label="Single sign-on providers">
+            <span className="sso-badge" aria-label={ariaSsoGoogle}>G</span>
+            <span className="sso-badge" aria-label={ariaSsoMicrosoft}>MS</span>
+          </div>
+          <ul className="trust-bullets">
+            <li>{trustAudit}</li>
+            <li>{trustVerified}</li>
+            <li>{trustPrivate}</li>
+          </ul>
+          <div className="customers-row" aria-label="Platform highlights">
+            <div className="feature-highlight">SSO Ready</div>
+            <div className="feature-highlight">GDPR Compliant</div>
+            <div className="feature-highlight">Audit Trails</div>
+            <div className="feature-highlight">Tamil Support</div>
           </div>
         </div>
       </section>
@@ -135,31 +245,59 @@ function Landing() {
           <div className="testimonial-grid">
             <div className="testimonial-card">
               <div className="testimonial-content">
-                "Recognition transformed our team culture. We saw a 40% increase in peer nominations and much more meaningful feedback."
+                {testimonial1}
               </div>
               <div className="testimonial-author">
-                <div className="author-avatar">AC</div>
+                <div className="author-avatar">RP</div>
                 <div>
-                  <div className="author-name">Alex Chen</div>
-                  <div className="author-title">VP of Engineering, TechCorp</div>
+                  <div className="author-name">{testimonial1Author}</div>
+                  <div className="author-title">{testimonial1Title}</div>
                 </div>
               </div>
             </div>
             <div className="testimonial-card">
               <div className="testimonial-content">
-                "The evidence-based approach eliminated bias in our recognition program. Now every recognition tells a story."
+                {testimonial2}
               </div>
               <div className="testimonial-author">
-                <div className="author-avatar">MR</div>
+                <div className="author-avatar">RP</div>
                 <div>
-                  <div className="author-name">Maria Rodriguez</div>
-                  <div className="author-title">Chief People Officer, ScaleUp Inc</div>
+                  <div className="author-name">{testimonial2Author}</div>
+                  <div className="author-title">{testimonial2Title}</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Demo Modal */}
+      {demoOpen && (
+        <div className="demo-modal" role="dialog" aria-modal="true" aria-labelledby={demoTitleId} onKeyDown={onDemoKeyDown}>
+          <div className="demo-overlay" onClick={() => setDemoOpen(false)} aria-hidden="true" />
+          <div className="demo-content" ref={demoRef}>
+            <div className="demo-header">
+              <h2 id={demoTitleId}>{demoTitle}</h2>
+              <button className="demo-close" aria-label={ariaClose} onClick={() => setDemoOpen(false)}>✕</button>
+            </div>
+            <form className="demo-form" onSubmit={(e) => { e.preventDefault(); setDemoOpen(false); }}>
+              <label className="demo-label">
+                {demoRecipient}
+                <input className="demo-input" type="text" placeholder="e.g., Priya Narayanan" required />
+              </label>
+              <label className="demo-label">
+                {demoTags}
+                <input className="demo-input" type="text" placeholder="e.g., #teamwork, #delivery" />
+              </label>
+              <label className="demo-label">
+                {demoReason}
+                <textarea className="demo-textarea" rows={3} placeholder={demoReasonPh} required />
+              </label>
+              <button className="btn-hero-primary cta-animate" type="submit">{demoSend}</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -237,7 +375,6 @@ function Feed() {
             <div className="error-icon">⚠️</div>
             <h3>Unable to load recognitions</h3>
             <p>{error}</p>
-            <p className="error-note">Showing sample data below. Please check your Appwrite configuration.</p>
           </div>
         </div>
       </main>
@@ -428,10 +565,59 @@ function Feed() {
 }
 
 function Profile() {
-  const currentUserId = "demo-user"; // This should come from auth context
+  const { useAuth } = React;
+  const auth = useAuth?.() || null;
+  const currentUserId = auth?.$id || "anonymous";
   const { recognitions, loading } = useUserRecognitions(currentUserId);
   const [activeTab, setActiveTab] = React.useState('overview');
   const [exportLoading, setExportLoading] = React.useState(false);
+
+  // i18n hooks for translations
+  const loadingMessage = useI18n('profile.loadingMessage');
+  const topRecognizerBadge = useI18n('profile.badges.topRecognizer');
+  const verifiedLeaderBadge = useI18n('profile.badges.verifiedLeader');
+  const exportPDFText = useI18n('profile.exportPDF');
+  const exportCSVText = useI18n('profile.exportCSV');
+  const recognitionsReceivedText = useI18n('profile.stats.recognitionsReceived');
+  const recognitionsGivenText = useI18n('profile.stats.recognitionsGiven');
+  const impactScoreText = useI18n('profile.impactScore');
+  const verificationRateText = useI18n('profile.verificationRate');
+  const changePositiveText = useI18n('profile.stats.changePositive');
+  const greatJobText = useI18n('profile.stats.greatJob');
+  const excellentText = useI18n('profile.stats.excellent');
+  const risingText = useI18n('profile.stats.rising');
+  const overviewTabText = useI18n('profile.tabs.overview');
+  const receivedTabText = useI18n('profile.tabs.received');
+  const givenTabText = useI18n('profile.tabs.given');
+  const analyticsTabText = useI18n('profile.tabs.analytics');
+  const recentActivityText = useI18n('profile.sections.recentActivity');
+  const topSkillsText = useI18n('profile.sections.topSkills');
+  const recognitionTrendsText = useI18n('profile.sections.recognitionTrends');
+  const keyInsightsText = useI18n('profile.sections.keyInsights');
+  const mentionsText = useI18n('profile.skills.mentions');
+  const growingRecognitionText = useI18n('profile.insights.growingRecognition');
+  const growingDescText = useI18n('profile.insights.growingDesc');
+  const leadershipFocusText = useI18n('profile.insights.leadershipFocus');
+  const leadershipDescText = useI18n('profile.insights.leadershipDesc');
+  const highImpactText = useI18n('profile.insights.highImpact');
+  const highImpactDescText = useI18n('profile.insights.highImpactDesc');
+  // Activity translations
+  const receivedFromText = useI18n('profile.activity.receivedFrom', { name: 'John Smith' });
+  const recognizedText = useI18n('profile.activity.recognized', { name: 'Maria Rodriguez' });
+  const verifiedText = useI18n('profile.activity.verified');
+  const forLeadershipText = useI18n('profile.activity.forLeadership');
+  const forSupportText = useI18n('profile.activity.forSupport');
+  const impactIncreasedText = useI18n('profile.activity.impactIncreased');
+  const twoDaysAgoText = useI18n('profile.activity.daysAgo', { days: '2' });
+  const oneWeekAgoText = useI18n('profile.activity.weekAgo');
+  const twoWeeksAgoText = useI18n('profile.activity.weeksAgo', { weeks: '2' });
+  // Chart month labels
+  const janText = useI18n('profile.chart.jan');
+  const febText = useI18n('profile.chart.feb');
+  const marText = useI18n('profile.chart.mar');
+  const aprText = useI18n('profile.chart.apr');
+  const mayText = useI18n('profile.chart.may');
+  const junText = useI18n('profile.chart.jun');
 
   // Mock user data - in real app this would come from auth context
   const user = {
@@ -501,7 +687,7 @@ function Profile() {
         <div className="container">
           <div className="loading-state">
             <div className="loading-spinner"></div>
-            <p>Loading your amazing profile...</p>
+            <p>{loadingMessage}</p>
           </div>
         </div>
       </main>
@@ -527,13 +713,13 @@ function Profile() {
                   <svg className="badge-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  Top Recognizer
+                  {topRecognizerBadge}
                 </span>
                 <span className="profile-badge verified">
                   <svg className="badge-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  Verified Leader
+                  {verifiedLeaderBadge}
                 </span>
               </div>
             </div>
@@ -552,7 +738,7 @@ function Profile() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-4-4m4 4l4-4m-4 4V8a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1V8z" />
                 </svg>
               )}
-              Export PDF
+              {exportPDFText}
             </button>
             <button 
               className="export-btn secondary"
@@ -562,7 +748,7 @@ function Profile() {
               <svg className="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Export CSV
+              {exportCSVText}
             </button>
           </div>
         </div>
@@ -577,8 +763,8 @@ function Profile() {
             </div>
             <div className="stat-content">
               <div className="stat-number">{analytics.totalReceived}</div>
-              <div className="stat-label">Recognitions Received</div>
-              <div className="stat-change positive">+12% this month</div>
+              <div className="stat-label">{recognitionsReceivedText}</div>
+              <div className="stat-change positive">{changePositiveText}</div>
             </div>
           </div>
 
@@ -590,8 +776,8 @@ function Profile() {
             </div>
             <div className="stat-content">
               <div className="stat-number">{analytics.totalGiven}</div>
-              <div className="stat-label">Recognitions Given</div>
-              <div className="stat-change positive">Great job!</div>
+              <div className="stat-label">{recognitionsGivenText}</div>
+              <div className="stat-change positive">{greatJobText}</div>
             </div>
           </div>
 
@@ -603,8 +789,8 @@ function Profile() {
             </div>
             <div className="stat-content">
               <div className="stat-number">{analytics.impactScore}</div>
-              <div className="stat-label">Impact Score</div>
-              <div className="stat-change positive">Rising ⭐</div>
+              <div className="stat-label">{impactScoreText}</div>
+              <div className="stat-change positive">{risingText}</div>
             </div>
           </div>
 
@@ -616,8 +802,8 @@ function Profile() {
             </div>
             <div className="stat-content">
               <div className="stat-number">{analytics.verificationRate.toFixed(0)}%</div>
-              <div className="stat-label">Verification Rate</div>
-              <div className="stat-change positive">Excellent!</div>
+              <div className="stat-label">{verificationRateText}</div>
+              <div className="stat-change positive">{excellentText}</div>
             </div>
           </div>
         </div>
@@ -628,25 +814,25 @@ function Profile() {
             className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
             onClick={() => setActiveTab('overview')}
           >
-            Overview
+            {overviewTabText}
           </button>
           <button 
             className={`tab-btn ${activeTab === 'received' ? 'active' : ''}`}
             onClick={() => setActiveTab('received')}
           >
-            Received ({analytics.totalReceived})
+            {receivedTabText} ({analytics.totalReceived})
           </button>
           <button 
             className={`tab-btn ${activeTab === 'given' ? 'active' : ''}`}
             onClick={() => setActiveTab('given')}
           >
-            Given ({analytics.totalGiven})
+            {givenTabText} ({analytics.totalGiven})
           </button>
           <button 
             className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
             onClick={() => setActiveTab('analytics')}
           >
-            Analytics
+            {analyticsTabText}
           </button>
         </div>
 
@@ -656,43 +842,43 @@ function Profile() {
             <div className="overview-content">
               <div className="content-grid">
                 <div className="overview-section">
-                  <h3>Recent Activity</h3>
+                  <h3>{recentActivityText}</h3>
                   <div className="activity-timeline">
                     <div className="timeline-item">
                       <div className="timeline-dot received"></div>
                       <div className="timeline-content">
-                        <div className="timeline-title">Received recognition from John Smith</div>
-                        <div className="timeline-subtitle">For exceptional project leadership</div>
-                        <div className="timeline-date">2 days ago</div>
+                        <div className="timeline-title">{receivedFromText}</div>
+                        <div className="timeline-subtitle">{forLeadershipText}</div>
+                        <div className="timeline-date">{twoDaysAgoText}</div>
                       </div>
                     </div>
                     <div className="timeline-item">
                       <div className="timeline-dot given"></div>
                       <div className="timeline-content">
-                        <div className="timeline-title">Recognized Maria Rodriguez</div>
-                        <div className="timeline-subtitle">For outstanding customer support</div>
-                        <div className="timeline-date">1 week ago</div>
+                        <div className="timeline-title">{recognizedText}</div>
+                        <div className="timeline-subtitle">{forSupportText}</div>
+                        <div className="timeline-date">{oneWeekAgoText}</div>
                       </div>
                     </div>
                     <div className="timeline-item">
                       <div className="timeline-dot verified"></div>
                       <div className="timeline-content">
-                        <div className="timeline-title">Recognition verified by manager</div>
-                        <div className="timeline-subtitle">Impact score increased by 20%</div>
-                        <div className="timeline-date">2 weeks ago</div>
+                        <div className="timeline-title">{verifiedText}</div>
+                        <div className="timeline-subtitle">{impactIncreasedText}</div>
+                        <div className="timeline-date">{twoWeeksAgoText}</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="overview-section">
-                  <h3>Top Skills</h3>
+                  <h3>{topSkillsText}</h3>
                   <div className="skills-list">
                     {analytics.topTags.map(({tag, count}, index) => (
                       <div key={tag} className="skill-item">
                         <div className="skill-info">
                           <span className="skill-name">#{tag}</span>
-                          <span className="skill-count">{count} mentions</span>
+                          <span className="skill-count">{count} {mentionsText.replace('{{count}}', '')}</span>
                         </div>
                         <div className="skill-bar">
                           <div 
@@ -715,7 +901,7 @@ function Profile() {
             <div className="analytics-content">
               <div className="analytics-grid">
                 <div className="chart-section">
-                  <h3>Recognition Trends</h3>
+                  <h3>{recognitionTrendsText}</h3>
                   <div className="chart-placeholder">
                     <div className="chart-bars">
                       <div className="chart-bar" style={{ height: '60%', animationDelay: '0s' }}></div>
@@ -726,33 +912,33 @@ function Profile() {
                       <div className="chart-bar" style={{ height: '95%', animationDelay: '0.5s' }}></div>
                     </div>
                     <div className="chart-labels">
-                      <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+                      <span>{janText}</span><span>{febText}</span><span>{marText}</span><span>{aprText}</span><span>{mayText}</span><span>{junText}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="insights-section">
-                  <h3>Key Insights</h3>
+                  <h3>{keyInsightsText}</h3>
                   <div className="insight-cards">
                     <div className="insight-card">
                       <div className="insight-icon">📈</div>
                       <div className="insight-text">
-                        <div className="insight-title">Growing Recognition</div>
-                        <div className="insight-subtitle">You&apos;ve received 40% more recognition this quarter</div>
+                        <div className="insight-title">{growingRecognitionText}</div>
+                        <div className="insight-subtitle">{growingDescText}</div>
                       </div>
                     </div>
                     <div className="insight-card">
                       <div className="insight-icon">🎯</div>
                       <div className="insight-text">
-                        <div className="insight-title">Leadership Focus</div>
-                        <div className="insight-subtitle">Most recognized for leadership and teamwork</div>
+                        <div className="insight-title">{leadershipFocusText}</div>
+                        <div className="insight-subtitle">{leadershipDescText}</div>
                       </div>
                     </div>
                     <div className="insight-card">
                       <div className="insight-icon">⭐</div>
                       <div className="insight-text">
-                        <div className="insight-title">High Impact</div>
-                        <div className="insight-subtitle">Your recognitions have 2.3x average weight</div>
+                        <div className="insight-title">{highImpactText}</div>
+                        <div className="insight-subtitle">{highImpactDescText}</div>
                       </div>
                     </div>
                   </div>
@@ -768,17 +954,85 @@ function Profile() {
 
 function AppShell() {
   const location = useLocation();
+  const { currentUser } = useAuth();
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
+  const [lang, setLang] = React.useState(getCurrentLocale());
+  const navFeed = useI18n('nav.feed');
+  const navLeaderboard = useI18n('nav.leaderboard');
+  const navAnalytics = useI18n('nav.analytics');
+  const navProfile = useI18n('nav.profile');
+  const navAdmin = useI18n('nav.admin');
+  const navDomains = useI18n('nav.domains');
+  const navAuditLogs = useI18n('nav.audit_logs');
+  const navCompliance = useI18n('nav.compliance');
+  const navLanguage = useI18n('nav.language');
+  const navSkip = useI18n('nav.skip_to_content');
+
+  React.useEffect(() => {
+  const handler = () => setLang(getCurrentLocale());
+    window.addEventListener('locale-change', handler);
+    return () => window.removeEventListener('locale-change', handler);
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      if (currentUser && location.pathname === '/feed') {
+        const state = await getOnboardingState();
+        setShowOnboarding(!isCompleted(state) && !state.skipped);
+      } else {
+        setShowOnboarding(false);
+      }
+    })();
+  }, [currentUser, location.pathname]);
+
+  const onLangChange = (e) => {
+    const newLocale = e.target.value;
+    setLocale(newLocale);
+    // setLocale dispatches 'locale-change' and persists to localStorage internally
+  };
   
   return (
     <div className="app-shell">
-      <a href="#main" className="skip-link">Skip to content</a>
+  <a href="#main" className="skip-link">{navSkip}</a>
       <header className="site-header" role="banner">
         <div className="container">
           <div className="brand">
             <Link to="/" className="logo">Recognition</Link>
             <nav className="site-nav" role="navigation" aria-label="Main navigation">
-              <Link to="/feed" className={`nav-link ${location.pathname === '/feed' ? 'active' : ''}`} aria-current={location.pathname === '/feed' ? 'page' : undefined}>Feed</Link>
-              <Link to="/profile" className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`} aria-current={location.pathname === '/profile' ? 'page' : undefined}>Profile</Link>
+              <Link to="/feed" className={`nav-link ${location.pathname === '/feed' ? 'active' : ''}`} aria-current={location.pathname === '/feed' ? 'page' : undefined}>{navFeed}</Link>
+              <Link to="/leaderboard" className={`nav-link ${location.pathname === '/leaderboard' ? 'active' : ''}`} aria-current={location.pathname === '/leaderboard' ? 'page' : undefined}>{navLeaderboard}</Link>
+              <Link to="/analytics" className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`} aria-current={location.pathname === '/analytics' ? 'page' : undefined}>{navAnalytics}</Link>
+              <Link to="/profile" className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`} aria-current={location.pathname === '/profile' ? 'page' : undefined}>{navProfile}</Link>
+              <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`} aria-current={location.pathname === '/settings' ? 'page' : undefined}>{useI18n('nav.settings')}</Link>
+              <Link to="/integrations" className={`nav-link ${location.pathname === '/integrations' ? 'active' : ''}`} aria-current={location.pathname === '/integrations' ? 'page' : undefined}>{useI18n('nav.integrations')}</Link>
+              {currentUser && currentUser.role === 'ADMIN' && (
+                <details className="admin-menu">
+                  <summary className="nav-link">{navAdmin} ⚙️</summary>
+                  <div className="admin-submenu">
+                    <Link to="/admin" className="submenu-link">Dashboard</Link>
+                    <Link to="/admin/verify" className="submenu-link">Verify</Link>
+                    <Link to="/admin/abuse" className="submenu-link">Abuse</Link>
+                    <Link to="/admin/analytics" className="submenu-link">Analytics</Link>
+                    <Link to="/admin/growth" className="submenu-link">Growth</Link>
+                    <hr className="submenu-divider" />
+                    <Link to="/admin/domains" className="submenu-link">{navDomains}</Link>
+                    <Link to="/admin/audit-logs" className="submenu-link">{navAuditLogs}</Link>
+                    <Link to="/admin/compliance-policies" className="submenu-link">{navCompliance}</Link>
+                    <Link to="/admin/system-health" className="submenu-link">System Health</Link>
+                    <Link to="/admin/quotas" className="submenu-link">Quotas</Link>
+                    <Link to="/admin/monitoring" className="submenu-link">Monitoring</Link>
+                    <Link to="/admin/incidents" className="submenu-link">Incidents</Link>
+                  </div>
+                </details>
+              )}
+              <label htmlFor="lang" className="sr-only">{navLanguage}</label>
+              <select id="lang" className="nav-link lang-select" aria-label={navLanguage} value={lang} onChange={onLangChange}>
+                {getAvailableLocales().map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc === 'en' ? 'English' : loc === 'ta' ? 'தமிழ்' : loc}
+                  </option>
+                ))}
+              </select>
             </nav>
           </div>
         </div>
@@ -788,13 +1042,39 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/feed" element={<Feed />} />
+          <Route path="/sign-in" element={<SignInPage />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/integrations" element={<IntegrationsPage />} />
+          <Route path="/demo/micro-interactions" element={<MicroInteractionsDemo />} />
+          <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+          <Route path="/admin/domains" element={<DomainsPage />} />
+          <Route path="/admin/audit-logs" element={<AuditLogExportPage />} />
+          <Route path="/admin/compliance-policies" element={<CompliancePolicyPage />} />
+          <Route path="/admin/system-health" element={<SystemHealthPage />} />
+          <Route path="/admin/quotas" element={<QuotaManagementPage />} />
+          <Route path="/admin/monitoring" element={<MonitoringDashboard />} />
+          <Route path="/admin/incidents" element={<IncidentResponse />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/verify" element={<AdminVerifyPage />} />
+          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+          <Route path="/admin/growth" element={<AdminGrowthPage />} />
+          <Route path="/admin/abuse" element={<AdminAbusePage />} />
         </Routes>
+        {showOnboarding && (
+          <OnboardingOverlay open={showOnboarding} onClose={() => setShowOnboarding(false)} />)
+        }
       </div>
 
       <footer className="site-footer" role="contentinfo">
-        <div className="container" style={{ padding: "16px" }}>
-          <small style={{ color: "#6b7280" }}>© 2025 Recognition — Demo UI with live Appwrite data.</small>
+        <div className="container" style={{ padding: "16px", display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <small style={{ color: "#6b7280" }}>© 2025 Recognition App</small>
+          <nav aria-label="Legal" className="legal-links">
+            <a href="#" className="legal-link">Terms</a>
+            <a href="#" className="legal-link">Privacy</a>
+          </nav>
         </div>
       </footer>
     </div>
@@ -804,7 +1084,10 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppShell />
+      <ToastProvider>
+        <AppShell />
+        <ToastContainer />
+      </ToastProvider>
     </BrowserRouter>
   );
 }

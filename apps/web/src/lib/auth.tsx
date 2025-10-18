@@ -15,6 +15,7 @@ interface AuthContextType {
   loading: boolean;
   signInWithOAuth: (provider: 'google' | 'microsoft') => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  signInWithMagicLink: (email: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
   isManager: () => boolean;
@@ -136,6 +137,31 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
     }
   }, [account, signInWithEmail]);
 
+  // Sign in with magic link (email)
+  const signInWithMagicLink = useCallback(async (email: string): Promise<void> => {
+    try {
+      // Prefer new Magic URL session API if available in SDK
+      const anyAccount: any = account as unknown as any;
+      if (typeof anyAccount.createMagicURLSession === 'function') {
+        // success URL returns to oauth callback handler which routes to /feed
+        // Using 'unique()' userId to auto-create user if not exists
+        await anyAccount.createMagicURLSession('unique()', email, OAUTH_SUCCESS_URL);
+        return;
+      }
+
+      // Fallback: create email token then ask user to check email
+      if (typeof anyAccount.createEmailToken === 'function') {
+        await anyAccount.createEmailToken('unique()', email);
+        return;
+      }
+
+      throw new Error('Magic link is not supported by the current SDK.');
+    } catch (error) {
+      console.error('Magic link sign-in error:', error);
+      throw new Error('Failed to send magic link. Please try again.');
+    }
+  }, [account]);
+
   // Sign out
   const signOut = useCallback(async (): Promise<void> => {
     try {
@@ -202,7 +228,15 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
       
       if (userId && secret) {
         try {
-          // OAuth callback successful, load user data
+          // If coming from Magic URL/email link, finalize session
+          const anyAccount: any = account as unknown as any;
+          if (typeof anyAccount.updateMagicURLSession === 'function') {
+            await anyAccount.updateMagicURLSession(userId, secret);
+          } else if (typeof anyAccount.createEmailSession === 'function') {
+            await anyAccount.createEmailSession(userId, secret);
+          }
+
+          // Load user data
           await loadUser();
           
           // Clean up URL
@@ -224,6 +258,7 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
     loading,
     signInWithOAuth,
     signInWithEmail,
+    signInWithMagicLink,
     signUp,
     signOut,
     isManager,

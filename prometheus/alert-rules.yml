@@ -1,0 +1,208 @@
+# Prometheus Alert Rules
+# Defines alert conditions and thresholds
+
+groups:
+  # SLO and service health alerts
+  - name: slo_alerts
+    interval: 15s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: |
+          (increase(function_errors_total[5m]) / increase(function_executions_total[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High error rate in {{ $labels.function }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 1%)"
+          runbook: "https://wiki.example.com/runbooks/high-error-rate"
+          
+      # Latency degradation alert
+      - alert: LatencyDegradation
+        expr: |
+          histogram_quantile(0.99, rate(function_execution_time_ms_bucket[5m])) > 1000
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "P99 latency degraded for {{ $labels.function }}"
+          description: "P99 latency: {{ $value | humanizeDuration }} (threshold: 1000ms)"
+          runbook: "https://wiki.example.com/runbooks/latency-degradation"
+          
+      # SLO breach alert
+      - alert: SLOBreach
+        expr: |
+          (increase(function_errors_total[1h]) / increase(function_executions_total[1h])) > 0.005
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "{{ $labels.function }} SLO breached"
+          description: "Error rate {{ $value | humanizePercentage }} exceeds SLO (0.5%)"
+          dashboard: "http://localhost:3001/d/slo-dashboard"
+          
+  # Quota and rate limiting alerts
+  - name: quota_alerts
+    interval: 15s
+    rules:
+      - alert: QuotaExceeded
+        expr: quota_usage_percent > 100
+        for: 1m
+        labels:
+          severity: critical
+          component: quota
+        annotations:
+          summary: "Quota exceeded for {{ $labels.org }}"
+          description: "Organization has exceeded quota by {{ $value | humanizePercentage }}"
+          
+      - alert: QuotaWarning
+        expr: quota_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: quota
+        annotations:
+          summary: "Quota usage high for {{ $labels.org }}"
+          description: "Organization is at {{ $value }}% quota usage"
+          
+  # Circuit breaker alerts
+  - name: circuit_breaker_alerts
+    interval: 15s
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: "{{ $labels.service }}"
+        annotations:
+          summary: "Circuit breaker OPEN for {{ $labels.service }}"
+          description: "Circuit breaker state: {{ if eq $value 1 }}OPEN{{ else }}HALF_OPEN{{ end }}"
+          runbook: "https://wiki.example.com/runbooks/circuit-breaker-open"
+          
+      - alert: CircuitBreakerHalfOpen
+        expr: circuit_breaker_state == 2
+        for: 2m
+        labels:
+          severity: info
+          component: "{{ $labels.service }}"
+        annotations:
+          summary: "Circuit breaker HALF_OPEN for {{ $labels.service }}"
+          description: "Service {{ $labels.service }} is in HALF_OPEN state, testing recovery"
+          
+  # Job queue alerts
+  - name: queue_alerts
+    interval: 15s
+    rules:
+      - alert: HighJobQueueDepth
+        expr: job_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: jobs
+        annotations:
+          summary: "Job queue depth is high"
+          description: "Queue depth: {{ $value }} jobs (threshold: 100)"
+          runbook: "https://wiki.example.com/runbooks/job-queue-backlog"
+          
+      - alert: JobsFailingRapidly
+        expr: rate(jobs_failed_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: jobs
+        annotations:
+          summary: "High job failure rate"
+          description: "Job failure rate: {{ $value | humanize }}/sec"
+          runbook: "https://wiki.example.com/runbooks/job-failures"
+          
+  # Database and integration alerts
+  - name: integration_alerts
+    interval: 15s
+    rules:
+      - alert: DatabaseConnectionFailure
+        expr: increase(database_operation_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection failures detected"
+          description: "{{ $value }} connection errors in last 5 minutes"
+          runbook: "https://wiki.example.com/runbooks/database-issues"
+          
+      - alert: SlackIntegrationDown
+        expr: circuit_breaker_state{service="slack"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: slack
+        annotations:
+          summary: "Slack integration is down"
+          description: "Unable to send Slack notifications"
+          runbook: "https://wiki.example.com/runbooks/slack-outage"
+          
+      - alert: TeamsIntegrationDown
+        expr: circuit_breaker_state{service="teams"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: teams
+        annotations:
+          summary: "Teams integration is down"
+          description: "Unable to send Teams messages"
+          runbook: "https://wiki.example.com/runbooks/teams-outage"
+          
+  # Abuse detection alerts
+  - name: abuse_alerts
+    interval: 15s
+    rules:
+      - alert: AbuseSpike
+        expr: rate(abuse_flags_total[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: abuse
+        annotations:
+          summary: "Spike in abuse flag detections"
+          description: "Flag rate: {{ $value | humanize }}/sec"
+          dashboard: "http://localhost:3001/d/abuse-dashboard"
+          
+      - alert: ReciprocityAttackDetected
+        expr: increase(abuse_flags_total{type="reciprocity"}[1h]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          component: abuse
+        annotations:
+          summary: "Potential reciprocity attack detected"
+          description: "{{ $value }} reciprocal recognition patterns in last hour"
+          runbook: "https://wiki.example.com/runbooks/reciprocity-attack"
+          
+  # Cache and performance alerts
+  - name: performance_alerts
+    interval: 15s
+    rules:
+      - alert: LowCacheHitRate
+        expr: (cache_hits_total / (cache_hits_total + cache_misses_total)) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate: {{ $value | humanizePercentage }} (threshold: 70%)"
+          
+      - alert: HighMemoryUsage
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory available: {{ $value | humanizePercentage }}"

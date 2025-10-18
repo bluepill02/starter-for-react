@@ -2,6 +2,9 @@ const { Client, Databases, Functions, ID } = require('node-appwrite');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
+// Import circuit breaker for Phase 4 advanced reliability
+const { CircuitBreaker } = require('../../services/circuit-breaker');
+
 // Initialize Appwrite client
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
@@ -10,6 +13,14 @@ const client = new Client()
 
 const databases = new Databases(client);
 const functions = new Functions(client);
+
+// Circuit breaker for Teams API calls (Phase 4)
+const teamsCircuitBreaker = new CircuitBreaker({
+  name: 'teams-api',
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 60000,
+});
 
 /**
  * Teams Integration Handler - JWT validation and compose extension

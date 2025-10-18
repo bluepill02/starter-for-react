@@ -75,12 +75,16 @@ export function useI18n(key: string, vars?: Record<string, string>): string {
 
   // Update locale when it changes globally
   useEffect(() => {
-    const handleLocaleChange = () => {
-      setLocaleState(currentLocale);
+    const handleLocaleChange = (e: Event) => {
+      // Prefer event detail if available; fallback to persisted value; finally module state
+      const detailLocale = (e as CustomEvent).detail as Locale | undefined;
+      const persisted = (typeof localStorage !== 'undefined' && localStorage.getItem('preferred-locale')) as Locale | null;
+      const next = detailLocale || persisted || currentLocale;
+      setLocaleState(next);
     };
 
-    window.addEventListener('locale-change', handleLocaleChange);
-    return () => window.removeEventListener('locale-change', handleLocaleChange);
+    window.addEventListener('locale-change', handleLocaleChange as EventListener);
+    return () => window.removeEventListener('locale-change', handleLocaleChange as EventListener);
   }, []);
 
   return translation;
@@ -91,8 +95,8 @@ export function setLocale(newLocale: Locale): void {
   currentLocale = newLocale;
   localStorage.setItem('preferred-locale', newLocale);
   
-  // Dispatch event to notify all useI18n hooks
-  window.dispatchEvent(new Event('locale-change'));
+  // Dispatch event with detail to notify all useI18n hooks reliably across module instances
+  window.dispatchEvent(new CustomEvent('locale-change', { detail: newLocale }));
 }
 
 // Function to get current locale

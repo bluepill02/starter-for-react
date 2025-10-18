@@ -1,0 +1,102 @@
+# AlertManager Configuration
+# Routes and groups alerts for notifications
+
+global:
+  resolve_timeout: 5m
+
+# The root route with all parameters, which are inherited by the child routes if they are not overwritten.
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 4h
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 0s
+      repeat_interval: 1h
+      
+    # Warning alerts - batch and notify
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 30s
+      repeat_interval: 4h
+      
+    # Info alerts - batch only
+    - match:
+        severity: info
+      receiver: 'info'
+      group_wait: 1m
+      repeat_interval: 12h
+
+receivers:
+  - name: 'default'
+    # Slack webhook
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+        
+  - name: 'critical'
+    # Critical alerts go to multiple channels
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL_CRITICAL}'
+        channel: '#critical-alerts'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\nRunbook: {{ .Annotations.runbook }}{{ end }}'
+        send_resolved: true
+    # Email notification
+    email_configs:
+      - to: 'oncall@example.com'
+        from: 'alerts@recognition-platform.com'
+        smarthost: 'smtp.example.com:587'
+        auth_username: 'alerts@recognition-platform.com'
+        auth_password: '${EMAIL_PASSWORD}'
+        headers:
+          Subject: 'CRITICAL: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          {{ range .Alerts }}
+          <p><strong>{{ .Annotations.summary }}</strong></p>
+          <p>{{ .Annotations.description }}</p>
+          <p><a href="{{ .Annotations.runbook }}">View Runbook</a></p>
+          {{ end }}
+          
+  - name: 'warning'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+        
+  - name: 'info'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-info'
+        title: 'ℹ️ {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: false
+
+# Inhibition rules - silence certain alerts based on others
+inhibit_rules:
+  # If critical alert firing, suppress warning alerts
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'component']
+    
+  # If warning alert firing, suppress info alerts
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'component']

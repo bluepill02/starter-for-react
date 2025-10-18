@@ -155,3 +155,48 @@ export const VerificationSchema = z.object({
   note: z.string().optional(),
 });
 export type Verification = z.infer<typeof VerificationSchema>;
+
+// Social Share Event Schema
+export const SocialShareEventSchema = z.object({
+  $id: z.string(),
+  recognitionId: z.string(),
+  giverId: z.string(),
+  platform: z.enum(['SLACK', 'TEAMS', 'LINKEDIN', 'LINK']),
+  shareToken: z.string(),
+  shareUrl: z.string().url(),
+  previewUrl: z.string().url().optional(),
+  includeProfile: z.boolean().default(false),
+  message: z.string().optional(),
+  expiresAt: z.string().datetime(),
+  trackingId: z.string(),
+  viewCount: z.number().default(0),
+  clickCount: z.number().default(0),
+  reactCount: z.number().default(0),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type SocialShareEvent = z.infer<typeof SocialShareEventSchema>;
+
+// Social Share Audit Schema (for tracking shares in audit log)
+export const SocialShareAuditSchema = z.object({
+  $id: z.string(),
+  recognitionId: z.string(),
+  giverId: z.string(),
+  platform: z.enum(['SLACK', 'TEAMS', 'LINKEDIN', 'LINK']),
+  shareToken: z.string(),
+  shareUrl: z.string().url(),
+  recipientCount: z.number().optional(),
+  previewGenerated: z.boolean().default(false),
+  createdAt: z.string().datetime(),
+});
+export type SocialShareAudit = z.infer<typeof SocialShareAuditSchema>;
+
+// Share Tracking Action Schema
+export const ShareTrackingActionSchema = z.object({
+  shareToken: z.string(),
+  action: z.enum(['CLICK', 'VIEW', 'REACT']),
+  viewerId: z.string().optional(), // Hashed viewer ID for privacy
+  referrerSource: z.string().optional(),
+  timestamp: z.string().datetime(),
+});
+export type ShareTrackingAction = z.infer<typeof ShareTrackingActionSchema>;

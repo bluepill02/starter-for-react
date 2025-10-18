@@ -14,7 +14,7 @@ export function LanguageSwitcher(): ReactElement {
 
   return (
     <div className="flex flex-col gap-4 p-4 border rounded-lg bg-white shadow-sm">
-      <h3 className="text-lg font-semibold">Language Switcher Demo</h3>
+      <h3 className="text-lg font-semibold">Select Language</h3>
       
       <div className="flex gap-2">
         {availableLocales.map((locale) => (

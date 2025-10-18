@@ -48,6 +48,13 @@ export function RecognitionFeed(): React.ReactElement {
   const databases = getDatabase();
   const observerRef = useRef<HTMLDivElement>(null);
 
+  const maskEmail = (email: string): string => {
+    if (!email || !email.includes('@')) return email;
+    const [local, domain] = email.split('@');
+    const maskedLocal = local.length <= 2 ? local[0] + '*' : local[0] + '*'.repeat(Math.max(1, local.length - 2)) + local[local.length - 1];
+    return `${maskedLocal}@${domain}`;
+  };
+
   // Build query filters based on user permissions and filter settings
   const buildQueryFilters = useCallback(() => {
     const queries: string[] = [];
@@ -341,7 +348,7 @@ export function RecognitionFeed(): React.ReactElement {
                     </span>
                     <span className="text-gray-500">recognized</span>
                     <span className="font-medium text-blue-600">
-                      {recognition.recipientEmail}
+                      {maskEmail(recognition.recipientEmail)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-500">

@@ -1,7 +1,9 @@
 // Admin Abuse Review Dashboard - Production Implementation
 import React, { useState, useEffect, useCallback } from 'react';
-import { functions, databases } from '../../appwrite/client';
-import { ID } from 'appwrite';
+import { useAuth } from '../../lib/auth';
+import { useI18n } from '../../lib/i18n';
+import { getDatabase, getFunctions } from '../../appwrite/client';
+import { Query } from 'appwrite';
 
 // Type definitions (inline until schema package is properly imported)
 interface AbuseFlag {
@@ -61,15 +63,15 @@ interface AdminStats {
   flagsByType: Record<string, number>;
 }
 
-const DATABASE_ID = process.env.REACT_APP_DATABASE_ID || 'main';
+const DATABASE_ID = import.meta.env.VITE_DATABASE_ID || 'main';
 const ABUSE_FLAGS_COLLECTION_ID = 'abuse_flags';
 const RECOGNITIONS_COLLECTION_ID = 'recognitions';
 
 export default function AbuseAdminPage(): React.ReactElement {
-  // Mock auth and i18n until proper hooks are available
-  const user = { id: 'admin', role: 'ADMIN' };
-  const isAdmin = true;
-  const t = (key: string, fallback?: string) => fallback || key;
+  const { currentUser, hasRole } = useAuth();
+  const t = useI18n;
+  const databases = getDatabase();
+  const functions = getFunctions();
   
   // State management
   const [abuseCases, setAbuseCases] = useState<AbuseCase[]>([]);
@@ -89,13 +91,13 @@ export default function AbuseAdminPage(): React.ReactElement {
 
   // Check admin permissions
   useEffect(() => {
-    if (!user || !isAdmin) {
+    if (!currentUser || !hasRole('ADMIN')) {
       setError('Admin access required');
       return;
     }
     loadAbuseData();
     loadAdminStats();
-  }, [user, isAdmin, filters]);
+  }, [currentUser, hasRole, filters]);
 
   // Load abuse cases with current filters
   const loadAbuseData = useCallback(async () => {
@@ -345,7 +347,7 @@ export default function AbuseAdminPage(): React.ReactElement {
   };
 
   // Handle access control
-  if (!user || !isAdmin) {
+  if (!currentUser || !hasRole('ADMIN')) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
@@ -354,10 +356,10 @@ export default function AbuseAdminPage(): React.ReactElement {
               <span className="text-red-600 text-2xl">🚫</span>
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              {t('admin.access_denied', 'Access Denied')}
+              Access Denied
             </h2>
             <p className="text-gray-600">
-              {t('admin.admin_required', 'Administrator access is required to view this page.')}
+              Administrator access is required to view this page.
             </p>
           </div>
         </div>
@@ -372,10 +374,10 @@ export default function AbuseAdminPage(): React.ReactElement {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <h1 className="text-3xl font-bold text-gray-900">
-              {t('admin.abuse_dashboard', 'Abuse Review Dashboard')}
+              Abuse Review Dashboard
             </h1>
             <p className="mt-2 text-gray-600">
-              {t('admin.abuse_subtitle', 'Review and manage flagged recognitions requiring administrative action')}
+              Review and manage flagged recognitions requiring administrative action
             </p>
           </div>
         </div>

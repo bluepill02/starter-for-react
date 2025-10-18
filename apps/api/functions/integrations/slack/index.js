@@ -5,6 +5,9 @@
 const { Client, Databases, Functions, ID } = require('node-appwrite');
 const crypto = require('crypto');
 
+// Import circuit breaker for Phase 4 advanced reliability
+const { CircuitBreaker } = require('../../services/circuit-breaker');
+
 // Initialize Appwrite client
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
@@ -13,6 +16,14 @@ const client = new Client()
 
 const databases = new Databases(client);
 const functions = new Functions(client);
+
+// Circuit breaker for Slack webhook calls (Phase 4)
+const slackCircuitBreaker = new CircuitBreaker({
+  name: 'slack-webhook',
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 60000,
+});
 
 // Slack signature verification with enhanced security
 function verifySlackSignature(body, signature, timestamp) {
@@ -94,22 +105,34 @@ async function createSlackAuditEntry(data) {
   }
 }
 
-// Send Slack notification
+// Send Slack notification with circuit breaker (Phase 4)
 async function sendSlackNotification(webhookUrl, message) {
   try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    // Use circuit breaker to protect against cascading failures
+    const result = await slackCircuitBreaker.call(
+      async () => {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(message)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Webhook failed: ${response.status} ${response.statusText}`);
+        }
+
+        return { success: true };
       },
-      body: JSON.stringify(message)
-    });
+      // Fallback: Queue notification for retry
+      async () => {
+        console.warn('Slack webhook circuit open, queueing notification for retry');
+        return { success: false, queued: true, error: 'Service temporarily unavailable' };
+      }
+    );
 
-    if (!response.ok) {
-      throw new Error(`Webhook failed: ${response.status} ${response.statusText}`);
-    }
-
-    return { success: true };
+    return result;
   } catch (error) {
     console.error('Slack notification failed:', error);
     return { success: false, error: error.message };

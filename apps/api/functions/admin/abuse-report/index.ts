@@ -3,13 +3,18 @@ import { Client, Databases } from 'node-appwrite';
 import crypto from 'crypto';
 
 // Environment variables
-const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://localhost/v1';
-const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID!;
-const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY!;
+const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1';
+const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || '';
+const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY || '';
 const DATABASE_ID = process.env.DATABASE_ID || 'main';
 const ABUSE_FLAGS_COLLECTION_ID = process.env.ABUSE_FLAGS_COLLECTION_ID || 'abuse_flags';
 const RECOGNITION_COLLECTION_ID = process.env.RECOGNITION_COLLECTION_ID || 'recognitions';
 const AUDIT_COLLECTION_ID = process.env.AUDIT_COLLECTION_ID || 'audit_entries';
+
+// Validate required environment variables
+if (!APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
+  throw new Error('Missing required environment variables: APPWRITE_PROJECT_ID and APPWRITE_API_KEY');
+}
 
 // Initialize Appwrite client
 const client = new Client()
@@ -19,15 +24,15 @@ const client = new Client()
 
 const databases = new Databases(client);
 
-// Interfaces
-interface ReportRequest {
+// Types (replacing interfaces)
+type ReportRequest = {
   summaryOnly?: boolean;
   dateRange?: 'today' | '7d' | '30d' | '90d' | 'all';
   flagTypes?: string[];
   severityLevels?: string[];
-}
+};
 
-interface AbuseStatistics {
+type AbuseStatistics = {
   totalFlags: number;
   pendingReview: number;
   resolvedToday: number;
@@ -40,9 +45,9 @@ interface AbuseStatistics {
     averageReduction: number;
     totalWeightReduced: number;
   };
-}
+};
 
-interface SuggestedAction {
+type SuggestedAction = {
   recognitionId: string;
   flagIds: string[];
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -50,9 +55,9 @@ interface SuggestedAction {
   reasoning: string;
   riskScore: number;
   metadata: Record<string, any>;
-}
+};
 
-interface AbuseReportData {
+type AbuseReportData = {
   generatedAt: string;
   dateRange: string;
   statistics: AbuseStatistics;
@@ -68,7 +73,7 @@ interface AbuseReportData {
     averageResolutionTime: number;
     systemLoad: string;
   };
-}
+};
 
 // Hash user ID for privacy in logs and exports
 function hashUserId(userId: string): string {

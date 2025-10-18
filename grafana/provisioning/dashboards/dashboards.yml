@@ -1,0 +1,15 @@
+# Grafana Dashboard Provisioning
+# Automatically loads dashboards from the dashboards directory
+
+apiVersion: 1
+
+providers:
+  - name: 'Recognition Dashboards'
+    orgId: 1
+    folder: 'Recognition'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

@@ -2,6 +2,11 @@
 import { Client, Databases, Users, ID } from 'node-appwrite';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { checkRateLimit } from '../services/rate-limiter';
+import { getIdempotencyKey, checkDuplicate, storeIdempotencyRecord } from '../services/idempotency';
+import { QuotaManager } from '../services/quota-management';
+import { getMetricsCollector } from '../services/metrics-exporter';
+import { logStructured } from '../services/structured-logger';
 
 // Node.js globals (available in Appwrite Functions runtime)
 /* global process */
@@ -109,6 +114,15 @@ export default async ({ req, res, log, error }: any) => {
     const requestData = VerifyRequestSchema.parse(req.body);
     log(`Processing verification for recognition: ${requestData.recognitionId}`);
     
+    // Phase 3A: Check idempotency for duplicate protection
+    const idempotencyKey = getIdempotencyKey(req);
+    if (idempotencyKey && requestData.verifierId) {
+      const duplicate = await checkDuplicate(idempotencyKey, requestData.verifierId);
+      if (duplicate) {
+        return res.json(duplicate.responseData, 200);
+      }
+    }
+    
     // Get verifier user info
     const verifier = await users.get(requestData.verifierId);
     const verifierRole = verifier.prefs?.role || 'USER';
@@ -130,6 +144,45 @@ export default async ({ req, res, log, error }: any) => {
       return res.json({
         error: 'Insufficient permissions to verify recognitions'
       }, 403);
+    }
+
+    // Check rate limits for verification actions
+    const rateLimitCheck = await checkRateLimit(
+      requestData.verifierId,
+      'verification_daily',
+      databases
+    );
+    if (!rateLimitCheck.allowed) {
+      await createAuditEntry(
+        'VERIFICATION_RATE_LIMITED',
+        requestData.verifierId,
+        requestData.recognitionId,
+        {
+          rateLimitType: 'verification_daily',
+          remaining: rateLimitCheck.remaining
+        }
+      );
+      return res.json({
+        success: false,
+        error: `Rate limit exceeded. You have ${rateLimitCheck.remaining} verifications remaining today.`
+      }, 429);
+    }
+    
+    // Check organization quotas (Phase 4)
+    try {
+      const verifierDoc = await databases.getDocument('main', 'users', requestData.verifierId);
+      const organizationId = verifierDoc.organizationId;
+      const quotaManager = new QuotaManager(organizationId);
+      const quotaCheck = await quotaManager.checkQuota('verifications_per_day');
+      if (!quotaCheck.allowed) {
+        return res.json({
+          success: false,
+          error: `Organization verification quota exceeded. Remaining: ${quotaCheck.remaining}`
+        }, 429);
+      }
+    } catch (quotaErr) {
+      // Graceful degradation: if quota check fails, log but continue
+      console.warn('Quota check failed in verify-recognition, continuing with degraded service', quotaErr);
     }
     
     // Get the recognition to verify
@@ -246,6 +299,16 @@ export default async ({ req, res, log, error }: any) => {
         verifiedAt: updatedRecognition.verifiedAt
       }
     };
+    
+    // Phase 3A: Store idempotency result for duplicate protection
+    if (idempotencyKey && requestData.verifierId) {
+      await storeIdempotencyRecord(
+        idempotencyKey,
+        requestData.verifierId,
+        'verify_recognition',
+        response
+      );
+    }
     
     log(`Verification completed: ${requestData.verified ? 'VERIFIED' : 'REJECTED'} with weight ${newWeight}`);
     return res.json(response);

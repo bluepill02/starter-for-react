@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { ID } from 'appwrite';
 import { z } from 'zod';
 import { getStorage, getFunctions } from '../appwrite/client';
+import { announcePolite, announceAssertive } from './liveRegion';
 // import { useI18n } from './i18n'; // For future internationalization
 
 // Zod validation schema for evidence files
@@ -112,14 +113,7 @@ export function useEvidenceUpload(): UseEvidenceUploadReturn {
     const fileArray = Array.from(newFiles);
     
     if (files.length + fileArray.length > MAX_FILES) {
-      // Create a temporary ARIA live region announcement
-      const announcement = document.createElement('div');
-      announcement.setAttribute('aria-live', 'polite');
-      announcement.setAttribute('aria-atomic', 'true');
-      announcement.className = 'sr-only';
-      announcement.textContent = `Maximum ${MAX_FILES} evidence files allowed`;
-      document.body.appendChild(announcement);
-      setTimeout(() => document.body.removeChild(announcement), 1000);
+      announcePolite(`Maximum ${MAX_FILES} evidence files allowed`, 1500);
       return;
     }
 
@@ -142,12 +136,7 @@ export function useEvidenceUpload(): UseEvidenceUploadReturn {
 
     // Announce successful file addition
     if (validatedFiles.length > 0) {
-      const announcement = document.createElement('div');
-      announcement.setAttribute('aria-live', 'polite');
-      announcement.className = 'sr-only';
-      announcement.textContent = `${validatedFiles.length} files added for evidence upload`;
-      document.body.appendChild(announcement);
-      setTimeout(() => document.body.removeChild(announcement), 1000);
+      announcePolite(`${validatedFiles.length} files added for evidence upload`, 1000);
     }
   }, [files.length]);
 
@@ -185,12 +174,7 @@ export function useEvidenceUpload(): UseEvidenceUploadReturn {
       for (const evidenceFile of validFiles) {
         try {
           // Announce upload start
-          const announcement = document.createElement('div');
-          announcement.setAttribute('aria-live', 'polite');
-          announcement.className = 'sr-only';
-          announcement.textContent = `Uploading ${evidenceFile.file.name}...`;
-          document.body.appendChild(announcement);
-          setTimeout(() => document.body.removeChild(announcement), 1000);
+          announcePolite(`Uploading ${evidenceFile.file.name}...`, 1000);
 
           // Update progress
           setFiles(prev => prev.map(f => 
@@ -239,12 +223,7 @@ export function useEvidenceUpload(): UseEvidenceUploadReturn {
           ));
 
           // Announce upload completion
-          const completionAnnouncement = document.createElement('div');
-          completionAnnouncement.setAttribute('aria-live', 'polite');
-          completionAnnouncement.className = 'sr-only';
-          completionAnnouncement.textContent = `${evidenceFile.file.name} upload complete`;
-          document.body.appendChild(completionAnnouncement);
-          setTimeout(() => document.body.removeChild(completionAnnouncement), 1000);
+          announcePolite(`${evidenceFile.file.name} upload complete`, 1000);
 
           // Mark as uploaded
           setFiles(prev => prev.map(f => 
@@ -281,24 +260,13 @@ export function useEvidenceUpload(): UseEvidenceUploadReturn {
           ));
 
           // Announce individual file error
-          const errorAnnouncement = document.createElement('div');
-          errorAnnouncement.setAttribute('aria-live', 'assertive');
-          errorAnnouncement.className = 'sr-only';
-          errorAnnouncement.textContent = `Upload failed for ${evidenceFile.file.name}`;
-          document.body.appendChild(errorAnnouncement);
-          setTimeout(() => document.body.removeChild(errorAnnouncement), 2000);
+          announceAssertive(`Upload failed for ${evidenceFile.file.name}`, 2000);
         }
       }
 
       // Announce completion
       if (storageIds.length > 0) {
-        const announcement = document.createElement('div');
-        announcement.setAttribute('aria-live', 'polite');
-        announcement.setAttribute('aria-atomic', 'true');
-        announcement.className = 'sr-only';
-        announcement.textContent = `${storageIds.length} evidence files uploaded successfully`;
-        document.body.appendChild(announcement);
-        setTimeout(() => document.body.removeChild(announcement), 2000);
+        announcePolite(`${storageIds.length} evidence files uploaded successfully`, 2000);
       }
 
       return storageIds;
@@ -306,13 +274,8 @@ export function useEvidenceUpload(): UseEvidenceUploadReturn {
     } catch (error) {
       console.error('Evidence upload failed:', error);
       
-      // Announce general error
-      const announcement = document.createElement('div');
-      announcement.setAttribute('aria-live', 'assertive');
-      announcement.className = 'sr-only';
-      announcement.textContent = 'Evidence upload failed';
-      document.body.appendChild(announcement);
-      setTimeout(() => document.body.removeChild(announcement), 2000);
+  // Announce general error
+  announceAssertive('Evidence upload failed', 2000);
       
       throw error;
     } finally {

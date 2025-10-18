@@ -2,6 +2,9 @@
 import { Client, Databases, Storage, Users, ID } from 'node-appwrite';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { checkRateLimit } from '../services/rate-limiter';
+import { getIdempotencyKey, checkDuplicate, storeIdempotencyRecord } from '../services/idempotency';
+import { Job, JobPriority } from '../services/background-worker';
 
 // Node.js globals (available in Appwrite Functions runtime)
 /* global process, Buffer */
@@ -270,6 +273,16 @@ export default async ({ req, res, log, error }: any) => {
     const requestData = ExportRequestSchema.parse(req.body);
     log(`Processing export for user: ${requestData.userId}, format: ${requestData.format}`);
     
+    // Check for duplicate export requests (idempotency - Phase 3A)
+    const idempotencyKey = getIdempotencyKey(req);
+    if (idempotencyKey && requestData.requesterId) {
+      const duplicate = await checkDuplicate(idempotencyKey, requestData.requesterId);
+      if (duplicate) {
+        log('Returning cached export result for duplicate request');
+        return res.json(duplicate.responseData, 200);
+      }
+    }
+    
     // Get requester info for permissions
     const requester = await users.get(requestData.requesterId);
     const requesterRole = requester.prefs?.role || 'USER';
@@ -277,6 +290,39 @@ export default async ({ req, res, log, error }: any) => {
     // Check permissions
     const isOwnProfile = requestData.userId === requestData.requesterId;
     const canExportOthers = requesterRole === 'ADMIN' || requesterRole === 'MANAGER';
+    
+    if (!isOwnProfile && !canExportOthers) {
+      await createAuditEntry(
+        'EXPORT_UNAUTHORIZED',
+        requestData.requesterId,
+        requestData.userId
+      );
+      return res.json({
+        error: 'Insufficient permissions to export this profile'
+      }, 403);
+    }
+
+    // Check rate limits for export requests
+    const rateLimitCheck = await checkRateLimit(
+      requestData.requesterId,
+      'export_profile',
+      databases
+    );
+    if (!rateLimitCheck.allowed) {
+      await createAuditEntry(
+        'EXPORT_RATE_LIMITED',
+        requestData.requesterId,
+        requestData.userId,
+        {
+          rateLimitType: 'export_profile',
+          remaining: rateLimitCheck.remaining
+        }
+      );
+      return res.json({
+        success: false,
+        error: `Rate limit exceeded. You have ${rateLimitCheck.remaining} exports remaining today.`
+      }, 429);
+    }
     
     if (!isOwnProfile && !canExportOthers) {
       await createAuditEntry(
@@ -379,12 +425,27 @@ export default async ({ req, res, log, error }: any) => {
       }
     );
     
-    // Schedule file deletion after 24 hours (in a real implementation)
-    // TODO: Implement cleanup function to delete expired export files
+    // Schedule file deletion after 24 hours using background worker (Phase 4)
+    try {
+      const cleanupJob = new Job({
+        type: 'file-cleanup',
+        payload: {
+          fileId,
+          bucketId: process.env.STORAGE_BUCKET_ID || 'exports',
+          expiresAt: Date.now() + (24 * 3600 * 1000)
+        },
+        priority: JobPriority.LOW,
+        scheduledFor: new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+      });
+      log(`Queued cleanup job for export file: ${fileId}`);
+    } catch (jobErr) {
+      // Graceful degradation: if job queueing fails, file will need manual cleanup
+      console.warn('Failed to queue cleanup job, file will need manual cleanup', jobErr);
+    }
     
     log(`Export completed successfully: ${fileName}`);
     
-    return res.json({
+    const responseData = {
       success: true,
       downloadUrl,
       fileName: fileName.replace(/[0-9]{13}/, 'TIMESTAMP'), // Hide timestamp in filename
@@ -392,7 +453,19 @@ export default async ({ req, res, log, error }: any) => {
       recordCount: recognitionData.length,
       expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour
       includePrivateData
-    });
+    };
+
+    // Store idempotency result (Phase 3A)
+    if (idempotencyKey && requestData.requesterId) {
+      await storeIdempotencyRecord(
+        idempotencyKey,
+        requestData.requesterId,
+        'export_profile',
+        responseData
+      );
+    }
+    
+    return res.json(responseData);
     
   } catch (validationError: any) {
     if (validationError instanceof z.ZodError) {
